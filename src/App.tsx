@@ -14,6 +14,12 @@ import CustomerFaturas from "./pages/customer/CustomerFaturas";
 import CustomerVitrine from "./pages/customer/CustomerVitrine";
 import CustomerCheckout from "./pages/customer/CustomerCheckout";
 import CustomerResgates from "./pages/customer/CustomerResgates";
+import { AdminLayout } from "./components/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminProdutos from "./pages/admin/AdminProdutos";
+import AdminResgates from "./pages/admin/AdminResgates";
+import AdminFaturas from "./pages/admin/AdminFaturas";
+import AdminRelatorios from "./pages/admin/AdminRelatorios";
 
 const queryClient = new QueryClient();
 
@@ -85,6 +91,58 @@ const App = () => (
                 <CustomerLayout>
                   <CustomerResgates />
                 </CustomerLayout>
+              </AuthGuard>
+            }
+          />
+
+          {/* Admin Routes */}
+          <Route
+            path="/admin"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminDashboard />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/produtos"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminProdutos />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/resgates"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminResgates />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/faturas"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminFaturas />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/relatorios"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminRelatorios />
+                </AdminLayout>
               </AuthGuard>
             }
           />
