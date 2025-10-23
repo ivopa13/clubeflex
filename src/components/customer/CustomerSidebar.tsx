@@ -35,13 +35,13 @@ export function CustomerSidebar() {
   };
 
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
-    isActive ? "bg-primary text-primary-foreground font-medium" : "hover:bg-muted/50";
+    isActive ? "bg-white/20 text-white font-medium" : "text-white/80 hover:bg-white/10 hover:text-white";
 
   return (
-    <Sidebar className={state === "collapsed" ? "w-14" : "w-60"}>
-      <SidebarContent>
+    <Sidebar className={`bg-primary ${state === "collapsed" ? "w-14" : "w-60"}`}>
+      <SidebarContent className="bg-primary">
         <SidebarGroup>
-          <SidebarGroupLabel className={state === "collapsed" ? "text-center" : ""}>
+          <SidebarGroupLabel className={`text-white ${state === "collapsed" ? "text-center" : ""}`}>
             {state !== "collapsed" && "Portal do Cliente"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -60,10 +60,10 @@ export function CustomerSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="bg-primary">
         <Button
           variant="ghost"
-          className="w-full justify-start"
+          className="w-full justify-start text-white hover:bg-white/20"
           onClick={handleLogout}
         >
           <LogOut className={state === "collapsed" ? "" : "mr-2"} />
