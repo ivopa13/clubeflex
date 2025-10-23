@@ -25,10 +25,10 @@ const AdminFaturas = () => {
   });
 
   const statusMap = {
-    created: { label: "Criada", variant: "secondary" as const },
-    partially_paid: { label: "Parcial", variant: "default" as const },
-    paid: { label: "Paga", variant: "default" as const },
-    canceled: { label: "Cancelada", variant: "destructive" as const },
+    created: { label: "Criada", variant: "secondary" as const, className: "" },
+    partially_paid: { label: "Parcial", variant: "default" as const, className: "" },
+    paid: { label: "Paga", variant: "default" as const, className: "bg-green-500 text-white hover:bg-green-600" },
+    canceled: { label: "Cancelada", variant: "destructive" as const, className: "" },
   };
 
   return (
@@ -68,21 +68,21 @@ const AdminFaturas = () => {
                       <TableCell className="font-mono text-sm">{invoice.invoice_id_ext}</TableCell>
                       <TableCell className="font-medium">{invoice.customer?.name || "N/A"}</TableCell>
                       <TableCell>{invoice.specifier?.name || "-"}</TableCell>
-                      <TableCell>R$ {Number(invoice.total_amount).toFixed(2)}</TableCell>
+                      <TableCell>R$ {Number(invoice.total_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-pending">
-                        {Number(invoice.pending_points_customer).toFixed(2)}
+                        {Number(invoice.pending_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts
                       </TableCell>
                       <TableCell className="text-redeemable">
-                        {Number(invoice.released_points_customer).toFixed(2)}
+                        {Number(invoice.released_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts
                       </TableCell>
                       <TableCell className="text-pending">
-                        {Number(invoice.pending_points_specifier).toFixed(2)}
+                        {Number(invoice.pending_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts
                       </TableCell>
                       <TableCell className="text-redeemable">
-                        {Number(invoice.released_points_specifier).toFixed(2)}
+                        {Number(invoice.released_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts
                       </TableCell>
                       <TableCell>
-                        <Badge variant={status.variant}>{status.label}</Badge>
+                        <Badge variant={status.variant} className={status.className}>{status.label}</Badge>
                       </TableCell>
                       <TableCell>
                         {format(new Date(invoice.created_at), "dd/MM/yy", { locale: ptBR })}

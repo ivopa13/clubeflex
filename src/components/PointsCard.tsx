@@ -29,7 +29,7 @@ export const PointsCard = ({ type, value, title, description }: PointsCardProps)
       </CardHeader>
       <CardContent>
         <div className={`text-2xl font-bold ${colors[type]}`}>
-          {value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pts
+          {value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
         </div>
         <p className="text-xs text-muted-foreground mt-1">{description}</p>
       </CardContent>

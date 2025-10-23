@@ -39,10 +39,10 @@ const AdminDashboard = () => {
   };
 
   const invoiceStatusMap = {
-    created: { label: "Criada", variant: "secondary" as const },
-    partially_paid: { label: "Parcial", variant: "default" as const },
-    paid: { label: "Paga", variant: "default" as const },
-    canceled: { label: "Cancelada", variant: "destructive" as const },
+    created: { label: "Criada", variant: "secondary" as const, className: "" },
+    partially_paid: { label: "Parcial", variant: "default" as const, className: "" },
+    paid: { label: "Paga", variant: "default" as const, className: "bg-green-500 text-white hover:bg-green-600" },
+    canceled: { label: "Cancelada", variant: "destructive" as const, className: "" },
   };
 
   return (
@@ -57,7 +57,7 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-pending">
-              {stats?.totalPending.toFixed(2)}
+              {stats?.totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
             </div>
             <p className="text-xs text-muted-foreground">Total aguardando liberação</p>
           </CardContent>
@@ -70,7 +70,7 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-redeemable">
-              {stats?.totalRedeemable.toFixed(2)}
+              {stats?.totalRedeemable.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
             </div>
             <p className="text-xs text-muted-foreground">Disponíveis para resgate</p>
           </CardContent>
@@ -83,7 +83,7 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-redeemed">
-              {stats?.totalRedeemedThisMonth.toFixed(2)}
+              {stats?.totalRedeemedThisMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
             </div>
             <p className="text-xs text-muted-foreground">Total de resgates do mês</p>
           </CardContent>
@@ -116,7 +116,7 @@ const AdminDashboard = () => {
                   return (
                     <TableRow key={redemption.id}>
                       <TableCell className="font-medium">{userName || "N/A"}</TableCell>
-                      <TableCell>{Number(redemption.total_points).toFixed(2)}</TableCell>
+                      <TableCell>{Number(redemption.total_points).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos</TableCell>
                       <TableCell>
                         <Badge variant={status.variant}>{status.label}</Badge>
                       </TableCell>
@@ -153,9 +153,9 @@ const AdminDashboard = () => {
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">{invoice.customer?.name || "N/A"}</TableCell>
-                      <TableCell>R$ {Number(invoice.total_amount).toFixed(2)}</TableCell>
+                      <TableCell>R$ {Number(invoice.total_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell>
-                        <Badge variant={status.variant}>{status.label}</Badge>
+                        <Badge variant={status.variant} className={status.className}>{status.label}</Badge>
                       </TableCell>
                       <TableCell>
                         {format(new Date(invoice.created_at), "dd/MM/yy", { locale: ptBR })}
