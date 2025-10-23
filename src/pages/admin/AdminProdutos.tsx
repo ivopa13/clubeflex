@@ -33,6 +33,7 @@ const AdminProdutos = () => {
 
   const saveMutation = useMutation({
     mutationFn: async (formData: FormData) => {
+      const imageUrl = formData.get("image_url") as string;
       const product = {
         sku: formData.get("sku") as string,
         name: formData.get("name") as string,
@@ -42,6 +43,7 @@ const AdminProdutos = () => {
         track_inventory: formData.get("track_inventory") === "true",
         category: formData.get("category") as string,
         is_active: formData.get("is_active") === "true",
+        image_urls: imageUrl ? [imageUrl] : null,
       };
 
       if (editingProduct) {
@@ -118,6 +120,16 @@ const AdminProdutos = () => {
                   <Label htmlFor="description">Descrição</Label>
                   <Textarea id="description" name="description" defaultValue={editingProduct?.description} />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="image_url">URL da Imagem</Label>
+                  <Input 
+                    id="image_url" 
+                    name="image_url" 
+                    type="url"
+                    placeholder="https://exemplo.com/imagem.jpg"
+                    defaultValue={editingProduct?.image_urls?.[0]} 
+                  />
+                </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="points_price">Preço em Pontos *</Label>
@@ -147,27 +159,37 @@ const AdminProdutos = () => {
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center space-x-2">
                     <Switch
-                      id="track_inventory"
-                      name="track_inventory"
+                      id="track_inventory_switch"
                       defaultChecked={editingProduct?.track_inventory ?? true}
                       onCheckedChange={(checked) => {
                         const input = document.getElementById("track_inventory") as HTMLInputElement;
                         input.value = checked.toString();
                       }}
                     />
-                    <Label htmlFor="track_inventory">Controlar Estoque</Label>
+                    <input 
+                      type="hidden" 
+                      id="track_inventory" 
+                      name="track_inventory" 
+                      defaultValue={(editingProduct?.track_inventory ?? true).toString()} 
+                    />
+                    <Label htmlFor="track_inventory_switch">Controlar Estoque</Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Switch
-                      id="is_active"
-                      name="is_active"
+                      id="is_active_switch"
                       defaultChecked={editingProduct?.is_active ?? true}
                       onCheckedChange={(checked) => {
                         const input = document.getElementById("is_active") as HTMLInputElement;
                         input.value = checked.toString();
                       }}
                     />
-                    <Label htmlFor="is_active">Ativo</Label>
+                    <input 
+                      type="hidden" 
+                      id="is_active" 
+                      name="is_active" 
+                      defaultValue={(editingProduct?.is_active ?? true).toString()} 
+                    />
+                    <Label htmlFor="is_active_switch">Ativo</Label>
                   </div>
                 </div>
               </div>
@@ -193,6 +215,7 @@ const AdminProdutos = () => {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Foto</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Pontos</TableHead>
@@ -205,6 +228,19 @@ const AdminProdutos = () => {
               <TableBody>
                 {products?.map((product) => (
                   <TableRow key={product.id}>
+                    <TableCell>
+                      {product.image_urls?.[0] ? (
+                        <img 
+                          src={product.image_urls[0]} 
+                          alt={product.name}
+                          className="h-12 w-12 object-cover rounded"
+                        />
+                      ) : (
+                        <div className="h-12 w-12 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">
+                          Sem foto
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-sm">{product.sku}</TableCell>
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell>{Number(product.points_price).toFixed(2)}</TableCell>

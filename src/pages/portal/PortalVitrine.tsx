@@ -86,6 +86,15 @@ const PortalVitrine = () => {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (
             <Card key={product.id} className="overflow-hidden">
+              {product.image_urls?.[0] && (
+                <div className="aspect-video w-full overflow-hidden bg-muted">
+                  <img 
+                    src={product.image_urls[0]} 
+                    alt={product.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
