@@ -38,10 +38,10 @@ export const AdminSidebar = () => {
   };
 
   return (
-    <Sidebar>
-      <SidebarContent>
+    <Sidebar className="bg-primary">
+      <SidebarContent className="bg-primary">
         <SidebarGroup>
-          <SidebarGroupLabel>Menu do Administrador</SidebarGroupLabel>
+          <SidebarGroupLabel className="text-white">Menu do Administrador</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => (
@@ -49,6 +49,9 @@ export const AdminSidebar = () => {
                   <SidebarMenuButton
                     onClick={() => navigate(item.path)}
                     isActive={location.pathname === item.path}
+                    className={location.pathname === item.path 
+                      ? "bg-white/20 text-white font-medium" 
+                      : "text-white/80 hover:bg-white/10 hover:text-white"}
                   >
                     <item.icon className="h-4 w-4" />
                     <span>{item.title}</span>
@@ -59,10 +62,13 @@ export const AdminSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="bg-primary">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleLogout}>
+            <SidebarMenuButton 
+              onClick={handleLogout}
+              className="text-white hover:bg-white/20"
+            >
               <LogOut className="h-4 w-4" />
               <span>Sair</span>
             </SidebarMenuButton>
