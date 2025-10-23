@@ -66,7 +66,7 @@ export type Database = {
         Row: {
           created_at: string | null
           customer_id_ext: string
-          doc: string | null
+          doc: string
           email: string | null
           id: string
           name: string
@@ -77,7 +77,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           customer_id_ext: string
-          doc?: string | null
+          doc: string
           email?: string | null
           id?: string
           name: string
@@ -88,7 +88,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           customer_id_ext?: string
-          doc?: string | null
+          doc?: string
           email?: string | null
           id?: string
           name?: string
@@ -407,7 +407,7 @@ export type Database = {
       specifiers: {
         Row: {
           created_at: string | null
-          doc: string | null
+          doc: string
           email: string | null
           id: string
           name: string
@@ -419,7 +419,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          doc?: string | null
+          doc: string
           email?: string | null
           id?: string
           name: string
@@ -431,7 +431,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          doc?: string | null
+          doc?: string
           email?: string | null
           id?: string
           name?: string

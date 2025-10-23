@@ -14,12 +14,80 @@ import logoFlex from "@/assets/logo-flex.png";
 const emailSchema = z.string().email({ message: "Email inválido" });
 const passwordSchema = z.string().min(6, { message: "Senha deve ter no mínimo 6 caracteres" });
 
+const validateCPF = (cpf: string): boolean => {
+  cpf = cpf.replace(/[^\d]/g, '');
+  if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
+  
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf.charAt(i)) * (10 - i);
+  let digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+  if (digit !== parseInt(cpf.charAt(9))) return false;
+  
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf.charAt(i)) * (11 - i);
+  digit = 11 - (sum % 11);
+  if (digit >= 10) digit = 0;
+  return digit === parseInt(cpf.charAt(10));
+};
+
+const validateCNPJ = (cnpj: string): boolean => {
+  cnpj = cnpj.replace(/[^\d]/g, '');
+  if (cnpj.length !== 14 || /^(\d)\1+$/.test(cnpj)) return false;
+  
+  let size = cnpj.length - 2;
+  let numbers = cnpj.substring(0, size);
+  const digits = cnpj.substring(size);
+  let sum = 0;
+  let pos = size - 7;
+  
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== parseInt(digits.charAt(0))) return false;
+  
+  size = size + 1;
+  numbers = cnpj.substring(0, size);
+  sum = 0;
+  pos = size - 7;
+  
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  
+  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  return result === parseInt(digits.charAt(1));
+};
+
+const formatDocument = (value: string): string => {
+  const numbers = value.replace(/[^\d]/g, '');
+  if (numbers.length <= 11) {
+    // CPF: 000.000.000-00
+    return numbers
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  } else {
+    // CNPJ: 00.000.000/0000-00
+    return numbers
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
+};
+
 const Auth = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [savedEmail, setSavedEmail] = useState("");
+  const [documentValue, setDocumentValue] = useState("");
 
   useEffect(() => {
     const storedEmail = localStorage.getItem("rememberedEmail");
@@ -147,10 +215,35 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const fullName = formData.get("fullName") as string;
+    const doc = documentValue.replace(/[^\d]/g, '');
 
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
+
+      // Validar documento
+      if (!doc || doc.length < 11) {
+        toast.error("Por favor, informe um CPF ou CNPJ válido");
+        return;
+      }
+
+      const isCPF = doc.length === 11;
+      const isCNPJ = doc.length === 14;
+
+      if (!isCPF && !isCNPJ) {
+        toast.error("Documento deve ter 11 dígitos (CPF) ou 14 dígitos (CNPJ)");
+        return;
+      }
+
+      if (isCPF && !validateCPF(doc)) {
+        toast.error("CPF inválido");
+        return;
+      }
+
+      if (isCNPJ && !validateCNPJ(doc)) {
+        toast.error("CNPJ inválido");
+        return;
+      }
 
       const redirectUrl = `${window.location.origin}/`;
 
@@ -161,6 +254,7 @@ const Auth = () => {
           emailRedirectTo: redirectUrl,
           data: {
             full_name: fullName,
+            doc: doc,
           },
         },
       });
@@ -175,6 +269,7 @@ const Auth = () => {
       }
 
       toast.success("Cadastro realizado! Por favor, faça login.");
+      setDocumentValue("");
     } catch (err) {
       if (err instanceof z.ZodError) {
         toast.error(err.errors[0].message);
@@ -272,6 +367,26 @@ const Auth = () => {
                     required
                     disabled={isLoading}
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="signup-doc">CPF ou CNPJ</Label>
+                  <Input
+                    id="signup-doc"
+                    name="doc"
+                    type="text"
+                    placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                    required
+                    disabled={isLoading}
+                    value={documentValue}
+                    onChange={(e) => {
+                      const formatted = formatDocument(e.target.value);
+                      setDocumentValue(formatted);
+                    }}
+                    maxLength={18}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Se você já foi cadastrado pela loja, será vinculado automaticamente
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="signup-email">Email</Label>
