@@ -28,7 +28,7 @@ const Auth = () => {
       emailSchema.parse(email);
       passwordSchema.parse(password);
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
@@ -42,28 +42,36 @@ const Auth = () => {
         return;
       }
 
-      // Get user role to redirect appropriately
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: roles } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", user.id)
-          .limit(1)
-          .maybeSingle();
+      if (!data.user) {
+        toast.error("Erro ao fazer login");
+        return;
+      }
 
-        if (roles?.role === "admin") {
-          navigate("/admin");
-        } else if (roles?.role === "specifier") {
-          navigate("/specifier");
-        } else if (roles?.role === "customer") {
-          navigate("/customer");
-        } else {
-          navigate("/");
-        }
+      // Get user role to redirect appropriately
+      const { data: roleData, error: roleError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+        .single();
+
+      if (roleError) {
+        console.error("Erro ao buscar role:", roleError);
+        toast.error("Usuário sem permissões configuradas. Entre em contato com o administrador.");
+        return;
       }
 
       toast.success("Login realizado com sucesso!");
+
+      // Navigate based on role
+      if (roleData.role === "admin") {
+        navigate("/admin");
+      } else if (roleData.role === "specifier") {
+        navigate("/specifier");
+      } else if (roleData.role === "customer") {
+        navigate("/customer");
+      } else {
+        navigate("/");
+      }
     } catch (err) {
       if (err instanceof z.ZodError) {
         toast.error(err.errors[0].message);
