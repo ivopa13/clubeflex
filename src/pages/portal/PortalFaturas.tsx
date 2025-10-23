@@ -80,14 +80,14 @@ const PortalFaturas = () => {
                     </TableCell>
                     <TableCell className="text-right text-[hsl(var(--points-pending))]">
                       {Number(invoice.pending_points_customer).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
                       })} pontos
                     </TableCell>
                     <TableCell className="text-right text-[hsl(var(--points-redeemable))]">
                       {(Number(invoice.released_points_customer) + Number(invoice.released_points_specifier)).toLocaleString("pt-BR", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
                       })} pontos
                     </TableCell>
                     <TableCell>

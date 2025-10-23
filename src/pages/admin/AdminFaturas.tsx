@@ -70,16 +70,16 @@ const AdminFaturas = () => {
                       <TableCell>{invoice.specifier?.name || "-"}</TableCell>
                       <TableCell>R$ {Number(invoice.total_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-pending">
-                        {Number(invoice.pending_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
+                        {Number(invoice.pending_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
                       </TableCell>
                       <TableCell className="text-redeemable">
-                        {Number(invoice.released_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
+                        {Number(invoice.released_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
                       </TableCell>
                       <TableCell className="text-pending">
-                        {Number(invoice.pending_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
+                        {Number(invoice.pending_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
                       </TableCell>
                       <TableCell className="text-redeemable">
-                        {Number(invoice.released_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
+                        {Number(invoice.released_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
                       </TableCell>
                       <TableCell>
                         <Badge variant={status.variant} className={status.className}>{status.label}</Badge>

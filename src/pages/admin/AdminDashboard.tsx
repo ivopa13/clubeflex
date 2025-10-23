@@ -57,7 +57,7 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-pending">
-              {stats?.totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
+              {stats?.totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
             </div>
             <p className="text-xs text-muted-foreground">Total aguardando liberação</p>
           </CardContent>
@@ -70,7 +70,7 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-redeemable">
-              {stats?.totalRedeemable.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
+              {stats?.totalRedeemable.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
             </div>
             <p className="text-xs text-muted-foreground">Disponíveis para resgate</p>
           </CardContent>
@@ -83,7 +83,7 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-redeemed">
-              {stats?.totalRedeemedThisMonth.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos
+              {stats?.totalRedeemedThisMonth.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
             </div>
             <p className="text-xs text-muted-foreground">Total de resgates do mês</p>
           </CardContent>
@@ -116,7 +116,7 @@ const AdminDashboard = () => {
                   return (
                     <TableRow key={redemption.id}>
                       <TableCell className="font-medium">{userName || "N/A"}</TableCell>
-                      <TableCell>{Number(redemption.total_points).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} pontos</TableCell>
+                      <TableCell>{Number(redemption.total_points).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos</TableCell>
                       <TableCell>
                         <Badge variant={status.variant}>{status.label}</Badge>
                       </TableCell>
