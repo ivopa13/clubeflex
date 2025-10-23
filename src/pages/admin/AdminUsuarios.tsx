@@ -130,7 +130,7 @@ const AdminUsuarios = () => {
                             onClick={() => handleAssignRole(user.id)}
                             disabled={!selectedRoles[user.id] || assignRoleMutation.isPending}
                           >
-                            <UserPlus className="h-4 w-4" />
+                            {assignRoleMutation.isPending ? 'Salvando...' : 'Salvar'}
                           </Button>
                         </div>
                       </TableCell>
