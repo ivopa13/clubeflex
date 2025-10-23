@@ -142,15 +142,15 @@ const AdminProdutos = () => {
               Novo Produto
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <form onSubmit={handleSubmit}>
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+            <form onSubmit={handleSubmit} className="flex flex-col h-full">
               <DialogHeader>
                 <DialogTitle>{editingProduct ? "Editar" : "Novo"} Produto</DialogTitle>
                 <DialogDescription>
                   Preencha as informações do produto
                 </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-4 py-4">
+              <div className="grid gap-4 py-4 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="sku">SKU *</Label>
