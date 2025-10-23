@@ -15,6 +15,7 @@ const passwordSchema = z.string().min(6, { message: "Senha deve ter no mínimo 6
 const Auth = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -80,6 +81,37 @@ const Auth = () => {
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (email: string) => {
+    if (!email) {
+      toast.error("Por favor, informe seu email");
+      return;
+    }
+
+    try {
+      emailSchema.parse(email);
+      setIsResetting(true);
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+
+      if (error) {
+        toast.error("Erro ao enviar email de recuperação");
+        return;
+      }
+
+      toast.success("Email de recuperação enviado! Verifique sua caixa de entrada.");
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        toast.error(err.errors[0].message);
+      } else {
+        toast.error("Erro ao enviar email de recuperação");
+      }
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -160,7 +192,20 @@ const Auth = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="signin-password">Senha</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="signin-password">Senha</Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const emailInput = document.getElementById("signin-email") as HTMLInputElement;
+                        handleResetPassword(emailInput?.value || "");
+                      }}
+                      disabled={isResetting}
+                      className="text-xs text-primary hover:underline disabled:opacity-50"
+                    >
+                      Esqueci minha senha
+                    </button>
+                  </div>
                   <Input
                     id="signin-password"
                     name="password"
