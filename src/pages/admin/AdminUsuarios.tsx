@@ -18,31 +18,18 @@ const AdminUsuarios = () => {
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => {
-      // Buscar todos os usuários do auth
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (authError) throw authError;
+      if (!session) throw new Error("Não autenticado");
 
-      // Buscar os roles de cada usuário
-      const { data: userRoles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("user_id, role");
-
-      if (rolesError) throw rolesError;
-
-      // Combinar dados
-      const usersWithRoles = authUsers.users.map((user) => {
-        const role = userRoles?.find((r) => r.user_id === user.id);
-        return {
-          id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name,
-          role: role?.role || null,
-          created_at: user.created_at,
-        };
+      const { data, error } = await supabase.functions.invoke("list-users", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
 
-      return usersWithRoles;
+      if (error) throw error;
+      return data.users;
     },
   });
 
