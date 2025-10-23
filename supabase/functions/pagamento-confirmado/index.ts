@@ -43,10 +43,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get invoice
+    // Get invoice with customer name
     const { data: invoice, error: invoiceError } = await supabase
       .from('invoices')
-      .select('*')
+      .select(`
+        *,
+        customer:customers(name)
+      `)
       .eq('invoice_id_ext', invoice_id_ext)
       .single();
 
@@ -123,6 +126,8 @@ Deno.serve(async (req) => {
 
     // Insert ledger entries
     const ledgerEntries = [];
+    const customerFirstName = invoice.customer?.name?.split(' ')[0] || '';
+    const invoiceRef = customerFirstName ? `${invoice_id_ext} - ${customerFirstName}` : invoice_id_ext;
 
     if (releaseCustomer > 0) {
       ledgerEntries.push({
@@ -132,7 +137,7 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
         type: 'pending_sub',
         points: -releaseCustomer,
-        ref: `Payment ${event_id} for invoice ${invoice_id_ext}`,
+        ref: `Pagamento ${invoiceRef}`,
       });
       ledgerEntries.push({
         actor_type: 'customer',
@@ -141,7 +146,7 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
         type: 'released_add',
         points: releaseCustomer,
-        ref: `Payment ${event_id} for invoice ${invoice_id_ext}`,
+        ref: `Pagamento ${invoiceRef}`,
       });
     }
 
@@ -153,7 +158,7 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
         type: 'pending_sub',
         points: -releaseSpecifier,
-        ref: `Payment ${event_id} for invoice ${invoice_id_ext}`,
+        ref: `Pagamento ${invoiceRef}`,
       });
       ledgerEntries.push({
         actor_type: 'specifier',
@@ -162,7 +167,7 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
         type: 'released_add',
         points: releaseSpecifier,
-        ref: `Payment ${event_id} for invoice ${invoice_id_ext}`,
+        ref: `Pagamento ${invoiceRef}`,
       });
     }
 

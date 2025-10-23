@@ -19,7 +19,13 @@ const PortalExtrato = () => {
       const actorIdColumn = actorType === "customer" ? "actor_id_customer" : "actor_id_specifier";
       const { data, error } = await supabase
         .from("points_ledger")
-        .select("*")
+        .select(`
+          *,
+          invoice:invoices(
+            invoice_id_ext,
+            customer:customers(name)
+          )
+        `)
         .eq("actor_type", actorType)
         .eq(actorIdColumn, actorId)
         .order("created_at", { ascending: false });
@@ -30,12 +36,20 @@ const PortalExtrato = () => {
   });
 
   const typeLabels: Record<string, string> = {
-    pending_add: "Pontos Pendentes Adicionados",
+    pending_add: "Pontos Adicionados",
     pending_sub: "Pontos Pendentes Liberados",
     released_add: "Pontos Liberados",
     released_sub: "Pontos Ajustados",
     redeem: "Resgate",
     refund: "Reembolso",
+  };
+
+  const getDisplayReference = (entry: any) => {
+    if (entry.invoice && entry.invoice.invoice_id_ext) {
+      const firstName = entry.invoice.customer?.name?.split(' ')[0] || '';
+      return firstName ? `${entry.invoice.invoice_id_ext} - ${firstName}` : entry.invoice.invoice_id_ext;
+    }
+    return entry.ref || "-";
   };
 
   return (
@@ -72,7 +86,7 @@ const PortalExtrato = () => {
                       {format(new Date(entry.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                     </TableCell>
                     <TableCell>{typeLabels[entry.type] || entry.type}</TableCell>
-                    <TableCell className="text-muted-foreground">{entry.ref || "-"}</TableCell>
+                    <TableCell className="text-muted-foreground">{getDisplayReference(entry)}</TableCell>
                     <TableCell className={`text-right font-medium ${Number(entry.points) >= 0 ? "text-accent" : "text-destructive"}`}>
                       {Number(entry.points) >= 0 ? "+" : ""}
                       {Number(entry.points).toLocaleString("pt-BR", {

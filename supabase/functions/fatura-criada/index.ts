@@ -136,6 +136,9 @@ Deno.serve(async (req) => {
     }
 
     // Insert ledger entries
+    const customerFirstName = invoice.customer.name.split(' ')[0];
+    const invoiceRef = `${invoice.invoice_id_ext} - ${customerFirstName}`;
+    
     const ledgerEntries = [
       {
         actor_type: 'customer',
@@ -144,7 +147,7 @@ Deno.serve(async (req) => {
         invoice_id: newInvoice.id,
         type: 'pending_add',
         points: pendingCustomer,
-        ref: `Invoice ${invoice.invoice_id_ext} created`,
+        ref: `Fatura ${invoiceRef}`,
       },
     ];
 
@@ -156,7 +159,7 @@ Deno.serve(async (req) => {
         invoice_id: newInvoice.id,
         type: 'pending_add',
         points: pendingSpecifier,
-        ref: `Invoice ${invoice.invoice_id_ext} created`,
+        ref: `Fatura ${invoiceRef}`,
       });
     }
 
