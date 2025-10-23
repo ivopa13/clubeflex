@@ -38,8 +38,8 @@ export const AdminSidebar = () => {
   };
 
   return (
-    <Sidebar className="bg-primary">
-      <SidebarContent className="bg-primary">
+    <Sidebar style={{ backgroundColor: "#18375d" }}>
+      <SidebarContent style={{ backgroundColor: "#18375d" }}>
         <SidebarGroup>
           <SidebarGroupLabel className="text-white">Menu do Administrador</SidebarGroupLabel>
           <SidebarGroupContent>
@@ -62,7 +62,7 @@ export const AdminSidebar = () => {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="bg-primary">
+      <SidebarFooter style={{ backgroundColor: "#18375d" }}>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton 
