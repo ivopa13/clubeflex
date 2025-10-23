@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ShoppingCart, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -117,6 +118,50 @@ const PortalVitrine = () => {
                 <CardDescription className="line-clamp-3 min-h-[3.6rem]">
                   {product.description || "Produto disponível para resgate"}
                 </CardDescription>
+                {product.description && product.description.length > 100 && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="link" className="p-0 h-auto mt-1">
+                        Leia mais
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>{product.name}</DialogTitle>
+                      </DialogHeader>
+                      {product.image_urls?.[0] && (
+                        <div className="aspect-video w-full overflow-hidden rounded-lg bg-muted">
+                          <img 
+                            src={product.image_urls[0]} 
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <DialogDescription className="text-base whitespace-pre-wrap">
+                        {product.description}
+                      </DialogDescription>
+                      <div className="flex items-center justify-between pt-4 border-t">
+                        <p className="text-2xl font-bold text-primary">
+                          {Number(product.points_price).toLocaleString("pt-BR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          <span className="text-sm">pontos</span>
+                        </p>
+                        <Button
+                          onClick={() => addToCart(product)}
+                          disabled={product.track_inventory && product.stock_qty === 0}
+                        >
+                          <ShoppingCart className="mr-2" />
+                          {product.track_inventory && product.stock_qty === 0
+                            ? "Sem Estoque"
+                            : "Adicionar"}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
                 <div className="mt-4">
                   <p className="text-2xl font-bold text-primary">
                     {Number(product.points_price).toLocaleString("pt-BR", {
