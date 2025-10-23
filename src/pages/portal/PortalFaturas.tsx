@@ -83,9 +83,11 @@ const PortalFaturas = () => {
                     </TableCell>
                     <TableCell className="text-right text-[hsl(var(--points-pending))]">
                       {Number(
-                        actorType === "customer" 
-                          ? invoice.pending_points_customer 
-                          : invoice.pending_points_specifier
+                        invoice.status === 'paid'
+                          ? 0
+                          : (actorType === "customer" 
+                              ? invoice.pending_points_customer 
+                              : invoice.pending_points_specifier)
                       ).toLocaleString("pt-BR", {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
@@ -93,9 +95,12 @@ const PortalFaturas = () => {
                     </TableCell>
                     <TableCell className="text-right text-[hsl(var(--points-redeemable))]">
                       {Number(
-                        actorType === "customer"
-                          ? invoice.released_points_customer
-                          : invoice.released_points_specifier
+                        invoice.status === 'paid'
+                          ? Number(actorType === "customer" ? invoice.pending_points_customer : invoice.pending_points_specifier) +
+                            Number(actorType === "customer" ? invoice.released_points_customer : invoice.released_points_specifier)
+                          : (actorType === "customer"
+                              ? invoice.released_points_customer
+                              : invoice.released_points_specifier)
                       ).toLocaleString("pt-BR", {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
