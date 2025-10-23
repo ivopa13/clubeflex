@@ -16,6 +16,7 @@ import CustomerCheckout from "./pages/customer/CustomerCheckout";
 import CustomerResgates from "./pages/customer/CustomerResgates";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminUsuarios from "./pages/admin/AdminUsuarios";
 import AdminProdutos from "./pages/admin/AdminProdutos";
 import AdminResgates from "./pages/admin/AdminResgates";
 import AdminFaturas from "./pages/admin/AdminFaturas";
@@ -102,6 +103,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminDashboard />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/usuarios"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminUsuarios />
                 </AdminLayout>
               </AuthGuard>
             }
