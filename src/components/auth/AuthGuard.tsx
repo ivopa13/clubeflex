@@ -14,6 +14,7 @@ export const AuthGuard = ({ children, allowedRoles }: AuthGuardProps) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasRole, setHasRole] = useState(false);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -28,12 +29,14 @@ export const AuthGuard = ({ children, allowedRoles }: AuthGuardProps) => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      setInitialized(true);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
+    if (!initialized) return;
     const checkAuth = async () => {
       if (!user) {
         navigate("/auth");
@@ -68,7 +71,7 @@ export const AuthGuard = ({ children, allowedRoles }: AuthGuardProps) => {
     };
 
     checkAuth();
-  }, [user, allowedRoles, navigate]);
+  }, [user, allowedRoles, navigate, initialized]);
 
   if (loading || !hasRole) {
     return (
