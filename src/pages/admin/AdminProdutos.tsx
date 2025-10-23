@@ -11,12 +11,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Upload, X } from "lucide-react";
 
 const AdminProdutos = () => {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const { data: products, isLoading } = useQuery({
     queryKey: ["admin-products"],
@@ -33,7 +35,27 @@ const AdminProdutos = () => {
 
   const saveMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const imageUrl = formData.get("image_url") as string;
+      let imageUrl = editingProduct?.image_urls?.[0] || null;
+
+      // Upload da imagem se houver
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('product-images')
+          .upload(filePath, imageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: { publicUrl } } = supabase.storage
+          .from('product-images')
+          .getPublicUrl(filePath);
+
+        imageUrl = publicUrl;
+      }
+
       const product = {
         sku: formData.get("sku") as string,
         name: formData.get("name") as string,
@@ -64,6 +86,8 @@ const AdminProdutos = () => {
       toast.success(editingProduct ? "Produto atualizado!" : "Produto criado!");
       setIsDialogOpen(false);
       setEditingProduct(null);
+      setImageFile(null);
+      setImagePreview(null);
     },
     onError: (error: any) => {
       toast.error(error.message || "Erro ao salvar produto");
@@ -78,12 +102,33 @@ const AdminProdutos = () => {
 
   const openNewDialog = () => {
     setEditingProduct(null);
+    setImageFile(null);
+    setImagePreview(null);
     setIsDialogOpen(true);
   };
 
   const openEditDialog = (product: any) => {
     setEditingProduct(product);
+    setImageFile(null);
+    setImagePreview(product.image_urls?.[0] || null);
     setIsDialogOpen(true);
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
   };
 
   return (
@@ -121,14 +166,41 @@ const AdminProdutos = () => {
                   <Textarea id="description" name="description" defaultValue={editingProduct?.description} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="image_url">URL da Imagem</Label>
-                  <Input 
-                    id="image_url" 
-                    name="image_url" 
-                    type="url"
-                    placeholder="https://exemplo.com/imagem.jpg"
-                    defaultValue={editingProduct?.image_urls?.[0]} 
-                  />
+                  <Label htmlFor="image">Imagem do Produto</Label>
+                  {imagePreview ? (
+                    <div className="relative">
+                      <img 
+                        src={imagePreview} 
+                        alt="Preview" 
+                        className="w-full h-48 object-cover rounded-md"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2"
+                        onClick={removeImage}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="border-2 border-dashed border-muted-foreground/25 rounded-md p-8 text-center hover:border-muted-foreground/50 transition-colors">
+                      <Input
+                        id="image"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageChange}
+                      />
+                      <Label htmlFor="image" className="cursor-pointer">
+                        <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          Clique para fazer upload da imagem
+                        </p>
+                      </Label>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
