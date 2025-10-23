@@ -55,6 +55,7 @@ const AdminFaturas = () => {
                   <TableHead>Liberado (C)</TableHead>
                   <TableHead>Pendente (E)</TableHead>
                   <TableHead>Liberado (E)</TableHead>
+                  <TableHead>Total Liberado</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
                 </TableRow>
@@ -80,6 +81,9 @@ const AdminFaturas = () => {
                       </TableCell>
                       <TableCell className="text-redeemable">
                         {Number(invoice.released_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
+                      </TableCell>
+                      <TableCell className="font-bold text-redeemable">
+                        {(Number(invoice.released_points_customer) + Number(invoice.released_points_specifier)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
                       </TableCell>
                       <TableCell>
                         <Badge variant={status.variant} className={status.className}>{status.label}</Badge>
