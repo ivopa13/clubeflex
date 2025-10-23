@@ -8,15 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { useCustomerBalance } from "@/hooks/useCustomerBalance";
-import { CartItem } from "./CustomerVitrine";
+import { usePortalBalance } from "@/hooks/usePortalBalance";
+import { CartItem } from "./PortalVitrine";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import { getUserActorInfo } from "@/lib/userRole";
 
-const CustomerCheckout = () => {
+const PortalCheckout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: balance } = useCustomerBalance();
+  const { data: balance } = usePortalBalance();
 
   const [cart, setCart] = useState<CartItem[]>(location.state?.cart || []);
   const [shippingAddress, setShippingAddress] = useState("");
@@ -48,20 +49,16 @@ const CustomerCheckout = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!customer) throw new Error("Customer not found");
+      const { actorType, actorId } = await getUserActorInfo();
+      if (!actorType || !actorId) throw new Error("Actor not found");
 
       // Create redemption
+      const actorIdField = actorType === "customer" ? "actor_id_customer" : "actor_id_specifier";
       const { data: redemption, error: redemptionError } = await supabase
         .from("redemptions")
         .insert({
-          actor_type: "customer",
-          actor_id_customer: customer.id,
+          actor_type: actorType,
+          [actorIdField]: actorId,
           total_points: cartTotal,
           shipping_info: shippingAddress ? { address: shippingAddress } : null,
           pickup_store: pickupStore || null,
@@ -90,8 +87,8 @@ const CustomerCheckout = () => {
       const { error: ledgerError } = await supabase
         .from("points_ledger")
         .insert({
-          actor_type: "customer",
-          actor_id_customer: customer.id,
+          actor_type: actorType,
+          [actorIdField]: actorId,
           type: "redeem",
           points: -cartTotal,
           ref: `Resgate #${redemption.id.slice(0, 8)}`,
@@ -102,10 +99,10 @@ const CustomerCheckout = () => {
       return redemption;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customer-balance"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-redemptions"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-balance"] });
+      queryClient.invalidateQueries({ queryKey: ["portal-redemptions"] });
       toast.success("Resgate solicitado com sucesso!");
-      navigate("/customer/resgates");
+      navigate("/portal/resgates");
     },
     onError: (error) => {
       toast.error(`Erro ao criar resgate: ${error.message}`);
@@ -138,7 +135,7 @@ const CustomerCheckout = () => {
               Seu carrinho está vazio
             </p>
             <div className="flex justify-center mt-4">
-              <Button onClick={() => navigate("/customer/vitrine")}>
+              <Button onClick={() => navigate("/portal/vitrine")}>
                 Ver Produtos
               </Button>
             </div>
@@ -285,4 +282,4 @@ const CustomerCheckout = () => {
   );
 };
 
-export default CustomerCheckout;
+export default PortalCheckout;

@@ -7,13 +7,13 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { AuthGuard } from "./components/auth/AuthGuard";
-import { CustomerLayout } from "./components/customer/CustomerLayout";
-import CustomerHome from "./pages/customer/CustomerHome";
-import CustomerExtrato from "./pages/customer/CustomerExtrato";
-import CustomerFaturas from "./pages/customer/CustomerFaturas";
-import CustomerVitrine from "./pages/customer/CustomerVitrine";
-import CustomerCheckout from "./pages/customer/CustomerCheckout";
-import CustomerResgates from "./pages/customer/CustomerResgates";
+import { PortalLayout } from "./components/portal/PortalLayout";
+import PortalHome from "./pages/portal/PortalHome";
+import PortalExtrato from "./pages/portal/PortalExtrato";
+import PortalFaturas from "./pages/portal/PortalFaturas";
+import PortalVitrine from "./pages/portal/PortalVitrine";
+import PortalCheckout from "./pages/portal/PortalCheckout";
+import PortalResgates from "./pages/portal/PortalResgates";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsuarios from "./pages/admin/AdminUsuarios";
@@ -34,64 +34,64 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
           
-          {/* Customer Routes */}
+          {/* Portal Routes (Customer & Specifier) */}
           <Route
-            path="/customer"
+            path="/portal"
             element={
-              <AuthGuard allowedRoles={["customer"]}>
-                <CustomerLayout>
-                  <CustomerHome />
-                </CustomerLayout>
+              <AuthGuard allowedRoles={["customer", "specifier"]}>
+                <PortalLayout>
+                  <PortalHome />
+                </PortalLayout>
               </AuthGuard>
             }
           />
           <Route
-            path="/customer/extrato"
+            path="/portal/extrato"
             element={
-              <AuthGuard allowedRoles={["customer"]}>
-                <CustomerLayout>
-                  <CustomerExtrato />
-                </CustomerLayout>
+              <AuthGuard allowedRoles={["customer", "specifier"]}>
+                <PortalLayout>
+                  <PortalExtrato />
+                </PortalLayout>
               </AuthGuard>
             }
           />
           <Route
-            path="/customer/faturas"
+            path="/portal/faturas"
             element={
-              <AuthGuard allowedRoles={["customer"]}>
-                <CustomerLayout>
-                  <CustomerFaturas />
-                </CustomerLayout>
+              <AuthGuard allowedRoles={["customer", "specifier"]}>
+                <PortalLayout>
+                  <PortalFaturas />
+                </PortalLayout>
               </AuthGuard>
             }
           />
           <Route
-            path="/customer/vitrine"
+            path="/portal/vitrine"
             element={
-              <AuthGuard allowedRoles={["customer"]}>
-                <CustomerLayout>
-                  <CustomerVitrine />
-                </CustomerLayout>
+              <AuthGuard allowedRoles={["customer", "specifier"]}>
+                <PortalLayout>
+                  <PortalVitrine />
+                </PortalLayout>
               </AuthGuard>
             }
           />
           <Route
-            path="/customer/checkout"
+            path="/portal/checkout"
             element={
-              <AuthGuard allowedRoles={["customer"]}>
-                <CustomerLayout>
-                  <CustomerCheckout />
-                </CustomerLayout>
+              <AuthGuard allowedRoles={["customer", "specifier"]}>
+                <PortalLayout>
+                  <PortalCheckout />
+                </PortalLayout>
               </AuthGuard>
             }
           />
           <Route
-            path="/customer/resgates"
+            path="/portal/resgates"
             element={
-              <AuthGuard allowedRoles={["customer"]}>
-                <CustomerLayout>
-                  <CustomerResgates />
-                </CustomerLayout>
+              <AuthGuard allowedRoles={["customer", "specifier"]}>
+                <PortalLayout>
+                  <PortalResgates />
+                </PortalLayout>
               </AuthGuard>
             }
           />

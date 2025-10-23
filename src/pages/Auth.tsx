@@ -59,15 +59,19 @@ const Auth = () => {
         return;
       }
 
-      // Get user role to redirect appropriately
-      const { data: roleData, error: roleError } = await supabase
+      // Get user roles to redirect appropriately
+      const { data: roles, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", data.user.id)
-        .single();
+        .eq("user_id", data.user.id);
 
       if (roleError) {
         console.error("Erro ao buscar role:", roleError);
+        toast.error("Usuário sem permissões configuradas. Entre em contato com o administrador.");
+        return;
+      }
+
+      if (!roles || roles.length === 0) {
         toast.error("Usuário sem permissões configuradas. Entre em contato com o administrador.");
         return;
       }
@@ -82,14 +86,15 @@ const Auth = () => {
       toast.success("Login realizado com sucesso!");
 
       // Navigate based on role
-      if (roleData.role === "admin") {
+      const userRoles = roles.map(r => r.role);
+      const hasAdminRole = userRoles.includes("admin");
+      
+      if (hasAdminRole) {
         navigate("/admin");
-      } else if (roleData.role === "specifier") {
-        navigate("/specifier");
-      } else if (roleData.role === "customer") {
-        navigate("/customer");
+      } else if (userRoles.includes("specifier") || userRoles.includes("customer")) {
+        navigate("/portal");
       } else {
-        navigate("/");
+        toast.error("Você não tem permissão para acessar o sistema");
       }
     } catch (err) {
       if (err instanceof z.ZodError) {

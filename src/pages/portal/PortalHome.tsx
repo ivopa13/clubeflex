@@ -1,4 +1,4 @@
-import { useCustomerBalance } from "@/hooks/useCustomerBalance";
+import { usePortalBalance } from "@/hooks/usePortalBalance";
 import { PointsCard } from "@/components/PointsCard";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
@@ -6,35 +6,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-const CustomerHome = () => {
-  const { data: balance, isLoading } = useCustomerBalance();
+const PortalHome = () => {
+  const { data: balance, isLoading } = usePortalBalance();
 
   // Get recent ledger entries
   const { data: recentEntries } = useQuery({
-    queryKey: ["customer-recent-ledger"],
+    queryKey: ["portal-recent-ledger"],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
+      if (!balance?.actorId || !balance?.actorType) return [];
 
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!customer) return [];
-
+      const actorIdColumn = balance.actorType === "customer" ? "actor_id_customer" : "actor_id_specifier";
       const { data, error } = await supabase
         .from("points_ledger")
         .select("*")
-        .eq("actor_type", "customer")
-        .eq("actor_id_customer", customer.id)
+        .eq("actor_type", balance.actorType)
+        .eq(actorIdColumn, balance.actorId)
         .order("created_at", { ascending: false })
         .limit(5);
 
       if (error) throw error;
       return data;
     },
+    enabled: !!balance?.actorId,
   });
 
   if (isLoading) {
@@ -122,4 +115,4 @@ const CustomerHome = () => {
   );
 };
 
-export default CustomerHome;
+export default PortalHome;

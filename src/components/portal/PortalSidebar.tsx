@@ -17,14 +17,14 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const items = [
-  { title: "Início", url: "/customer", icon: Home },
-  { title: "Extrato", url: "/customer/extrato", icon: FileText },
-  { title: "Faturas", url: "/customer/faturas", icon: Receipt },
-  { title: "Vitrine", url: "/customer/vitrine", icon: ShoppingBag },
-  { title: "Meus Resgates", url: "/customer/resgates", icon: Package },
+  { title: "Início", url: "/portal", icon: Home },
+  { title: "Extrato", url: "/portal/extrato", icon: FileText },
+  { title: "Faturas", url: "/portal/faturas", icon: Receipt },
+  { title: "Vitrine", url: "/portal/vitrine", icon: ShoppingBag },
+  { title: "Meus Resgates", url: "/portal/resgates", icon: Package },
 ];
 
-export function CustomerSidebar() {
+export function PortalSidebar() {
   const { state } = useSidebar();
   const navigate = useNavigate();
 
@@ -42,7 +42,7 @@ export function CustomerSidebar() {
       <SidebarContent className="bg-primary">
         <SidebarGroup>
           <SidebarGroupLabel className={`text-white ${state === "collapsed" ? "text-center" : ""}`}>
-            {state !== "collapsed" && "Portal do Cliente"}
+            {state !== "collapsed" && "Menu"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

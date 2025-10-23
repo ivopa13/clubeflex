@@ -1,41 +1,39 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { getUserActorInfo } from "@/lib/userRole";
 
-export interface CustomerBalance {
+export interface PortalBalance {
   pending: number;
   redeemable: number;
   redeemed: number;
-  customerId: string | null;
+  actorId: string | null;
+  actorType: "customer" | "specifier" | null;
 }
 
-export const useCustomerBalance = () => {
+export const usePortalBalance = () => {
   return useQuery({
-    queryKey: ["customer-balance"],
-    queryFn: async (): Promise<CustomerBalance> => {
+    queryKey: ["portal-balance"],
+    queryFn: async (): Promise<PortalBalance> => {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         throw new Error("User not authenticated");
       }
 
-      // Get customer record
-      const { data: customer, error: customerError } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Get user actor info (customer or specifier)
+      const { actorType, actorId } = await getUserActorInfo();
 
-      if (customerError) throw customerError;
-      if (!customer) {
-        return { pending: 0, redeemable: 0, redeemed: 0, customerId: null };
+      if (!actorType || !actorId) {
+        return { pending: 0, redeemable: 0, redeemed: 0, actorId: null, actorType: null };
       }
 
       // Get ledger entries
+      const actorIdColumn = actorType === "customer" ? "actor_id_customer" : "actor_id_specifier";
       const { data: ledger, error: ledgerError } = await supabase
         .from("points_ledger")
         .select("type, points")
-        .eq("actor_type", "customer")
-        .eq("actor_id_customer", customer.id);
+        .eq("actor_type", actorType)
+        .eq(actorIdColumn, actorId);
 
       if (ledgerError) throw ledgerError;
 
@@ -73,7 +71,8 @@ export const useCustomerBalance = () => {
         pending: Math.max(0, pending),
         redeemable: Math.max(0, redeemable),
         redeemed: Math.max(0, redeemed),
-        customerId: customer.id,
+        actorId,
+        actorType,
       };
     },
   });

@@ -13,7 +13,7 @@ export interface CartItem {
   quantity: number;
 }
 
-const CustomerVitrine = () => {
+const PortalVitrine = () => {
   const navigate = useNavigate();
   const [cart, setCart] = useState<CartItem[]>([]);
 
@@ -66,7 +66,7 @@ const CustomerVitrine = () => {
         {cartItemCount > 0 && (
           <Button
             size="lg"
-            onClick={() => navigate("/customer/checkout", { state: { cart } })}
+            onClick={() => navigate("/portal/checkout", { state: { cart } })}
             className="gap-2"
           >
             <ShoppingCart />
@@ -146,4 +146,4 @@ const CustomerVitrine = () => {
   );
 };
 
-export default CustomerVitrine;
+export default PortalVitrine;

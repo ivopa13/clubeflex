@@ -4,27 +4,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { getUserActorInfo } from "@/lib/userRole";
 
-const CustomerExtrato = () => {
+const PortalExtrato = () => {
   const { data: entries, isLoading } = useQuery({
-    queryKey: ["customer-ledger"],
+    queryKey: ["portal-ledger"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
+      const { actorType, actorId } = await getUserActorInfo();
+      if (!actorType || !actorId) throw new Error("Actor not found");
 
-      if (!customer) throw new Error("Customer not found");
-
+      const actorIdColumn = actorType === "customer" ? "actor_id_customer" : "actor_id_specifier";
       const { data, error } = await supabase
         .from("points_ledger")
         .select("*")
-        .eq("actor_type", "customer")
-        .eq("actor_id_customer", customer.id)
+        .eq("actor_type", actorType)
+        .eq(actorIdColumn, actorId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -96,4 +93,4 @@ const CustomerExtrato = () => {
   );
 };
 
-export default CustomerExtrato;
+export default PortalExtrato;

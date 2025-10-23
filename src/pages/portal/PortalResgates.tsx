@@ -4,22 +4,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { getUserActorInfo } from "@/lib/userRole";
 
-const CustomerResgates = () => {
+const PortalResgates = () => {
   const { data: redemptions, isLoading } = useQuery({
-    queryKey: ["customer-redemptions"],
+    queryKey: ["portal-redemptions"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
+      const { actorType, actorId } = await getUserActorInfo();
+      if (!actorType || !actorId) throw new Error("Actor not found");
 
-      if (!customer) throw new Error("Customer not found");
-
+      const actorIdColumn = actorType === "customer" ? "actor_id_customer" : "actor_id_specifier";
       const { data, error } = await supabase
         .from("redemptions")
         .select(`
@@ -29,8 +26,8 @@ const CustomerResgates = () => {
             product:catalog_products (*)
           )
         `)
-        .eq("actor_type", "customer")
-        .eq("actor_id_customer", customer.id)
+        .eq("actor_type", actorType)
+        .eq(actorIdColumn, actorId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -130,4 +127,4 @@ const CustomerResgates = () => {
   );
 };
 
-export default CustomerResgates;
+export default PortalResgates;

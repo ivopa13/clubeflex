@@ -5,26 +5,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { getUserActorInfo } from "@/lib/userRole";
 
-const CustomerFaturas = () => {
+const PortalFaturas = () => {
   const { data: invoices, isLoading } = useQuery({
-    queryKey: ["customer-invoices"],
+    queryKey: ["portal-invoices"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: customer } = await supabase
-        .from("customers")
-        .select("id")
-        .eq("user_id", user.id)
-        .single();
+      const { actorType, actorId } = await getUserActorInfo();
+      if (!actorType || !actorId) throw new Error("Actor not found");
 
-      if (!customer) throw new Error("Customer not found");
-
+      const filterColumn = actorType === "customer" ? "customer_id" : "specifier_id";
       const { data, error } = await supabase
         .from("invoices")
         .select("*")
-        .eq("customer_id", customer.id)
+        .eq(filterColumn, actorId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -111,4 +108,4 @@ const CustomerFaturas = () => {
   );
 };
 
-export default CustomerFaturas;
+export default PortalFaturas;

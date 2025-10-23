@@ -35,15 +35,14 @@ const Index = () => {
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle()
-        .then(({ data: role }) => {
-          if (role?.role === "admin") {
+        .then(({ data: roles }) => {
+          if (!roles || roles.length === 0) return;
+          
+          const hasAdminRole = roles.some(r => r.role === "admin");
+          if (hasAdminRole) {
             navigate("/admin");
-          } else if (role?.role === "specifier") {
-            navigate("/specifier");
-          } else if (role?.role === "customer") {
-            navigate("/customer");
+          } else if (roles.some(r => r.role === "specifier" || r.role === "customer")) {
+            navigate("/portal");
           }
         });
     }
