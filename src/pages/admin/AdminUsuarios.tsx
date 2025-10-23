@@ -35,23 +35,26 @@ const AdminUsuarios = () => {
 
   const assignRoleMutation = useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      // Primeiro, remover qualquer role existente
-      await supabase.from("user_roles").delete().eq("user_id", userId);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
 
-      // Inserir o novo role
-      const { error } = await supabase
-        .from("user_roles")
-        .insert([{ user_id: userId, role: role as "admin" | "customer" | "specifier" }]);
+      const { data, error } = await supabase.functions.invoke('assign-role', {
+        body: { userId, role: role as 'admin' | 'customer' | 'specifier' },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-      toast.success("Role atribuído com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success('Role atribuído com sucesso!');
       setSelectedRoles({});
     },
     onError: (error: any) => {
-      toast.error(error.message || "Erro ao atribuir role");
+      toast.error(error.message || 'Erro ao atribuir role');
     },
   });
 
