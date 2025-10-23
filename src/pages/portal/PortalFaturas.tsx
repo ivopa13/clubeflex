@@ -8,7 +8,7 @@ import { ptBR } from "date-fns/locale";
 import { getUserActorInfo } from "@/lib/userRole";
 
 const PortalFaturas = () => {
-  const { data: invoices, isLoading } = useQuery({
+  const { data: invoicesData, isLoading } = useQuery({
     queryKey: ["portal-invoices"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -25,9 +25,12 @@ const PortalFaturas = () => {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data;
+      return { invoices: data, actorType };
     },
   });
+
+  const invoices = invoicesData?.invoices;
+  const actorType = invoicesData?.actorType;
 
   const statusLabels: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
     created: { label: "Criada", variant: "secondary" },
@@ -79,13 +82,21 @@ const PortalFaturas = () => {
                       })}
                     </TableCell>
                     <TableCell className="text-right text-[hsl(var(--points-pending))]">
-                      {Number(invoice.pending_points_customer).toLocaleString("pt-BR", {
+                      {Number(
+                        actorType === "customer" 
+                          ? invoice.pending_points_customer 
+                          : invoice.pending_points_specifier
+                      ).toLocaleString("pt-BR", {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
                       })} pontos
                     </TableCell>
                     <TableCell className="text-right text-[hsl(var(--points-redeemable))]">
-                      {(Number(invoice.released_points_customer) + Number(invoice.released_points_specifier)).toLocaleString("pt-BR", {
+                      {Number(
+                        actorType === "customer"
+                          ? invoice.released_points_customer
+                          : invoice.released_points_specifier
+                      ).toLocaleString("pt-BR", {
                         minimumFractionDigits: 0,
                         maximumFractionDigits: 0,
                       })} pontos
