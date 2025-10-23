@@ -60,8 +60,8 @@ const PortalFaturas = () => {
                   <TableHead>Nº Fatura</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Pts Pendentes</TableHead>
-                  <TableHead className="text-right">Pts Liberados</TableHead>
+                  <TableHead className="text-right">Pontos Pendentes</TableHead>
+                  <TableHead className="text-right">Pontos Liberados</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -82,13 +82,13 @@ const PortalFaturas = () => {
                       {Number(invoice.pending_points_customer).toLocaleString("pt-BR", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
-                      })}
+                      })} pontos
                     </TableCell>
                     <TableCell className="text-right text-[hsl(var(--points-redeemable))]">
-                      {Number(invoice.released_points_customer).toLocaleString("pt-BR", {
+                      {(Number(invoice.released_points_customer) + Number(invoice.released_points_specifier)).toLocaleString("pt-BR", {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
-                      })}
+                      })} pontos
                     </TableCell>
                     <TableCell>
                       <Badge variant={statusLabels[invoice.status]?.variant || "default"}>
