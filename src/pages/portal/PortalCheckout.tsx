@@ -20,8 +20,7 @@ const PortalCheckout = () => {
   const { data: balance } = usePortalBalance();
 
   const [cart, setCart] = useState<CartItem[]>(location.state?.cart || []);
-  const [shippingAddress, setShippingAddress] = useState("");
-  const [pickupStore, setPickupStore] = useState("");
+  const pickupStore = "Loja Flex - Tambaú - Avenida José Gatto, 1308 – Centro – Tambaú – SP";
 
   const cartTotal = cart.reduce(
     (sum, item) => sum + Number(item.product.points_price) * item.quantity,
@@ -60,8 +59,7 @@ const PortalCheckout = () => {
           actor_type: actorType,
           [actorIdField]: actorId,
           total_points: cartTotal,
-          shipping_info: shippingAddress ? { address: shippingAddress } : null,
-          pickup_store: pickupStore || null,
+          pickup_store: pickupStore,
         })
         .select()
         .single();
@@ -204,27 +202,13 @@ const PortalCheckout = () => {
 
           <Card>
             <CardHeader>
-              <CardTitle>Entrega ou Retirada</CardTitle>
-              <CardDescription>Escolha como deseja receber seus produtos</CardDescription>
+              <CardTitle>Retirada</CardTitle>
+              <CardDescription>Seu produto será retirado na loja</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="shipping">Endereço de Entrega (opcional)</Label>
-                <Input
-                  id="shipping"
-                  placeholder="Rua, número, cidade..."
-                  value={shippingAddress}
-                  onChange={(e) => setShippingAddress(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="pickup">Loja para Retirada (opcional)</Label>
-                <Input
-                  id="pickup"
-                  placeholder="Nome da loja..."
-                  value={pickupStore}
-                  onChange={(e) => setPickupStore(e.target.value)}
-                />
+            <CardContent>
+              <div className="rounded-lg bg-muted p-4">
+                <Label className="text-sm font-medium">Local de Retirada</Label>
+                <p className="mt-2 text-sm">{pickupStore}</p>
               </div>
             </CardContent>
           </Card>

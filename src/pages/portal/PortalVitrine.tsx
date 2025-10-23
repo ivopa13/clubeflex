@@ -98,7 +98,7 @@ const PortalVitrine = () => {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="line-clamp-1">{product.name}</CardTitle>
+                    <CardTitle>{product.name}</CardTitle>
                     {product.category && (
                       <Badge variant="secondary" className="mt-2">
                         {product.category}
