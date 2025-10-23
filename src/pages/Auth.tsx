@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -16,6 +17,16 @@ const Auth = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [savedEmail, setSavedEmail] = useState("");
+
+  useEffect(() => {
+    const storedEmail = localStorage.getItem("rememberedEmail");
+    if (storedEmail) {
+      setSavedEmail(storedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -59,6 +70,13 @@ const Auth = () => {
         console.error("Erro ao buscar role:", roleError);
         toast.error("Usuário sem permissões configuradas. Entre em contato com o administrador.");
         return;
+      }
+
+      // Handle remember me
+      if (rememberMe) {
+        localStorage.setItem("rememberedEmail", email);
+      } else {
+        localStorage.removeItem("rememberedEmail");
       }
 
       toast.success("Login realizado com sucesso!");
@@ -189,6 +207,7 @@ const Auth = () => {
                     placeholder="seu@email.com"
                     required
                     disabled={isLoading}
+                    defaultValue={savedEmail}
                   />
                 </div>
                 <div className="space-y-2">
@@ -214,6 +233,19 @@ const Auth = () => {
                     required
                     disabled={isLoading}
                   />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember-me"
+                    checked={rememberMe}
+                    onCheckedChange={(checked) => setRememberMe(checked as boolean)}
+                  />
+                  <Label
+                    htmlFor="remember-me"
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Lembrar meu email
+                  </Label>
                 </div>
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Entrando..." : "Entrar"}
