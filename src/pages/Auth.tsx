@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { z } from "zod";
+import logoFlex from "@/assets/logo-flex.png";
 
 const emailSchema = z.string().email({ message: "Email inválido" });
 const passwordSchema = z.string().min(6, { message: "Senha deve ter no mínimo 6 caracteres" });
@@ -190,8 +191,9 @@ const Auth = () => {
       background: 'var(--gradient-hero)' 
     }}>
       <Card className="w-full max-w-md shadow-[var(--shadow-card)]">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">Flex Fidelidade</CardTitle>
+        <CardHeader className="text-center space-y-4">
+          <img src={logoFlex} alt="FLEX Clube" className="h-24 mx-auto object-contain" />
+          <CardTitle className="text-3xl font-bold">FLEX Clube</CardTitle>
           <CardDescription>Programa de Pontos para Construção</CardDescription>
         </CardHeader>
         <CardContent>
