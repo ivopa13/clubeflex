@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { User, Session } from "@supabase/supabase-js";
+import logoFlex from "@/assets/logo-flex.png";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -54,6 +55,9 @@ const Index = () => {
     }}>
       <Card className="w-full max-w-2xl shadow-[var(--shadow-card)]">
         <CardHeader className="text-center space-y-4">
+          <div className="flex justify-center mb-4">
+            <img src={logoFlex} alt="Flex Logo" className="h-24 w-auto" />
+          </div>
           <CardTitle className="text-5xl font-bold">Flex Fidelidade</CardTitle>
           <CardDescription className="text-lg">
             Programa de Pontos para Materiais de Construção
