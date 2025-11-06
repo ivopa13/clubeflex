@@ -10,6 +10,9 @@ public class SyncService
     private readonly ClubeFlexApiService _apiService;
     private readonly int _maxRetries;
     private readonly int _retryDelaySeconds;
+    private readonly bool _testMode;
+    private readonly int _testModeLimit;
+    private readonly DateTime? _syncFromDate;
 
     public SyncService(
         DatabaseService databaseService,
@@ -20,6 +23,19 @@ public class SyncService
         _apiService = apiService;
         _maxRetries = int.TryParse(configuration["SyncSettings:RetryAttempts"], out var retries) ? retries : 3;
         _retryDelaySeconds = int.TryParse(configuration["SyncSettings:RetryDelaySeconds"], out var delay) ? delay : 30;
+        _testMode = bool.TryParse(configuration["SyncSettings:TestMode"], out var testMode) && testMode;
+        _testModeLimit = int.TryParse(configuration["SyncSettings:TestModeLimit"], out var limit) ? limit : 10;
+        
+        var syncFromDateStr = configuration["SyncSettings:SyncFromDate"];
+        _syncFromDate = !string.IsNullOrEmpty(syncFromDateStr) && DateTime.TryParse(syncFromDateStr, out var date) 
+            ? date 
+            : null;
+
+        if (_testMode)
+            Log.Warning($"⚠️ MODO TESTE ATIVADO - Sincronizando apenas {_testModeLimit} registros mais recentes");
+        
+        if (_syncFromDate.HasValue)
+            Log.Information($"📅 Sincronizando apenas registros a partir de {_syncFromDate.Value:dd/MM/yyyy}");
     }
 
     /// <summary>
@@ -55,7 +71,8 @@ public class SyncService
     {
         try
         {
-            var invoices = await _databaseService.GetNewInvoicesAsync();
+            var limit = _testMode ? _testModeLimit : (int?)null;
+            var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate);
 
             if (invoices.Count == 0)
             {
@@ -106,7 +123,8 @@ public class SyncService
     {
         try
         {
-            var payments = await _databaseService.GetNewPaymentsAsync();
+            var limit = _testMode ? _testModeLimit : (int?)null;
+            var payments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate);
 
             if (payments.Count == 0)
             {

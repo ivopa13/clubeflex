@@ -16,12 +16,15 @@ public class DatabaseService
     /// <summary>
     /// Busca novas faturas que ainda não foram sincronizadas com sucesso
     /// </summary>
-    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync()
+    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync(int? limit = null, DateTime? fromDate = null)
     {
         var invoices = new List<FaturaCriadaPayload>();
 
-        var query = @"
-            SELECT FIRST 100
+        var batchSize = limit ?? 100;
+        var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+
+        var query = $@"
+            SELECT FIRST {batchSize}
                 m.NUMPED as invoice_id,
                 m.VALORTOTALNOTA as total_amount,
                 m.DATA as issued_at,
@@ -40,7 +43,9 @@ public class DatabaseService
             FROM MOVENDA m
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
             LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODETRANS
-            WHERE NOT EXISTS (
+            WHERE 1=1
+            {dateFilter}
+            AND NOT EXISTS (
                 SELECT 1 FROM sync_log sl
                 WHERE sl.event_id = 'FAT_' || CAST(m.NUMPED AS VARCHAR(50))
                 AND sl.event_type = 'fatura-criada'
@@ -124,18 +129,22 @@ public class DatabaseService
     /// <summary>
     /// Busca novos pagamentos confirmados que ainda não foram sincronizados
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync()
+    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null)
     {
         var payments = new List<PagamentoPayload>();
 
-        var query = @"
-            SELECT FIRST 100
+        var batchSize = limit ?? 100;
+        var dateFilter = fromDate.HasValue ? $"AND cr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+
+        var query = $@"
+            SELECT FIRST {batchSize}
                 cr.CODREC as payment_id,
                 cr.ID as invoice_id,
                 cr.VALOR as paid_amount,
                 cr.DATA as paid_at
             FROM CONTARECEBERREC cr
             WHERE cr.VALOR > 0
+            {dateFilter}
             AND NOT EXISTS (
                 SELECT 1 FROM sync_log sl
                 WHERE sl.event_id = 'PAG_' || CAST(cr.CODREC AS VARCHAR(50))
