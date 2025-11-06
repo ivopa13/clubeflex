@@ -42,15 +42,9 @@ public class DatabaseService
                 t.CATEGORIA as specifier_role
             FROM MOVENDA m
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
-            LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODETRANS
+            LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
             WHERE 1=1
             {dateFilter}
-            AND NOT EXISTS (
-                SELECT 1 FROM sync_log sl
-                WHERE sl.event_id = 'FAT_' || CAST(m.NUMPED AS VARCHAR(50))
-                AND sl.event_type = 'fatura-criada'
-                AND sl.status = 'success'
-            )
             ORDER BY m.DATA DESC";
 
         try
@@ -145,12 +139,6 @@ public class DatabaseService
             FROM CONTARECEBERREC cr
             WHERE cr.VALOR > 0
             {dateFilter}
-            AND NOT EXISTS (
-                SELECT 1 FROM sync_log sl
-                WHERE sl.event_id = 'PAG_' || CAST(cr.CODREC AS VARCHAR(50))
-                AND sl.event_type = 'pagamento-confirmado'
-                AND sl.status = 'success'
-            )
             ORDER BY cr.DATA DESC";
 
         try
