@@ -7,20 +7,24 @@ const corsHeaders = {
 
 interface InvoicePayload {
   event_id: string;
-  invoice: {
-    invoice_id_ext: string;
-    customer: {
-      id_ext: string;
-      name: string;
-    };
-    specifier?: {
-      id_ext: string;
-      name: string;
-      role: string;
-    };
-    total_amount: number;
-    items?: any[];
-    created_at: string;
+  source: string;
+  invoice_id_ext: string;
+  total_amount: number;
+  issued_at: string;
+  customer: {
+    id_ext: string;
+    name: string;
+    doc: string;
+    email?: string;
+    phone?: string;
+  };
+  specifier?: {
+    id_ext: string;
+    name: string;
+    doc: string;
+    email?: string;
+    phone?: string;
+    role: string;
   };
 }
 
@@ -38,7 +42,7 @@ Deno.serve(async (req) => {
     const payload: InvoicePayload = await req.json();
     console.log('Received invoice_created webhook:', payload);
 
-    const { event_id, invoice } = payload;
+    const { event_id, invoice_id_ext, total_amount, customer, specifier } = payload;
 
     // Check if event already processed (idempotency)
     const { data: existingEvent } = await supabase
@@ -56,11 +60,11 @@ Deno.serve(async (req) => {
     }
 
     // Upsert customer
-    const { data: customer, error: customerError } = await supabase
+    const { data: customerData, error: customerError } = await supabase
       .from('customers')
       .upsert({
-        customer_id_ext: invoice.customer.id_ext,
-        name: invoice.customer.name,
+        customer_id_ext: customer.id_ext,
+        name: customer.name,
         status: 'active',
       }, {
         onConflict: 'customer_id_ext',
@@ -75,13 +79,13 @@ Deno.serve(async (req) => {
     }
 
     let specifierId = null;
-    if (invoice.specifier) {
-      const { data: specifier, error: specifierError } = await supabase
+    if (specifier) {
+      const { data: specifierData, error: specifierError } = await supabase
         .from('specifiers')
         .upsert({
-          specifier_id_ext: invoice.specifier.id_ext,
-          name: invoice.specifier.name,
-          role: invoice.specifier.role,
+          specifier_id_ext: specifier.id_ext,
+          name: specifier.name,
+          role: specifier.role,
           status: 'active',
         }, {
           onConflict: 'specifier_id_ext',
@@ -94,7 +98,7 @@ Deno.serve(async (req) => {
         console.error('Error upserting specifier:', specifierError);
         throw specifierError;
       }
-      specifierId = specifier.id;
+      specifierId = specifierData.id;
     }
 
     // Get program settings
@@ -109,20 +113,19 @@ Deno.serve(async (req) => {
       throw settingsError;
     }
 
-    const totalAmount = invoice.total_amount;
-    const pendingCustomer = Number((totalAmount * settings.earn_rate_customer).toFixed(2));
+    const pendingCustomer = Number((total_amount * settings.earn_rate_customer).toFixed(2));
     const pendingSpecifier = specifierId 
-      ? Number((totalAmount * settings.earn_rate_specifier).toFixed(2))
+      ? Number((total_amount * settings.earn_rate_specifier).toFixed(2))
       : 0;
 
     // Create invoice
     const { data: newInvoice, error: invoiceError } = await supabase
       .from('invoices')
       .insert({
-        invoice_id_ext: invoice.invoice_id_ext,
-        customer_id: customer.id,
+        invoice_id_ext: invoice_id_ext,
+        customer_id: customerData.id,
         specifier_id: specifierId,
-        total_amount: totalAmount,
+        total_amount: total_amount,
         pending_points_customer: pendingCustomer,
         pending_points_specifier: pendingSpecifier,
         status: 'created',
@@ -136,13 +139,13 @@ Deno.serve(async (req) => {
     }
 
     // Insert ledger entries
-    const customerFirstName = invoice.customer.name.split(' ')[0];
-    const invoiceRef = `${invoice.invoice_id_ext} - ${customerFirstName}`;
+    const customerFirstName = customer.name.split(' ')[0];
+    const invoiceRef = `${invoice_id_ext} - ${customerFirstName}`;
     
     const ledgerEntries = [
       {
         actor_type: 'customer',
-        actor_id_customer: customer.id,
+        actor_id_customer: customerData.id,
         actor_id_specifier: null,
         invoice_id: newInvoice.id,
         type: 'pending_add',
@@ -186,7 +189,7 @@ Deno.serve(async (req) => {
       throw webhookError;
     }
 
-    console.log(`Invoice ${invoice.invoice_id_ext} processed successfully`);
+    console.log(`Invoice ${invoice_id_ext} processed successfully`);
 
     return new Response(
       JSON.stringify({ 
