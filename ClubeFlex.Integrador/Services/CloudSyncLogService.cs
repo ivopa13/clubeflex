@@ -1,22 +1,19 @@
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using ClubeFlex.Integrador.Models;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
+using Serilog;
 
 namespace ClubeFlex.Integrador.Services;
 
 public class CloudSyncLogService
 {
     private readonly HttpClient _httpClient;
-    private readonly ILogger<CloudSyncLogService> _logger;
     private readonly string _baseUrl;
     private readonly string _apiKey;
 
-    public CloudSyncLogService(IConfiguration configuration, ILogger<CloudSyncLogService> logger)
+    public CloudSyncLogService(IConfiguration configuration)
     {
-        _logger = logger;
         _httpClient = new HttpClient();
         
         var apiConfig = configuration.GetSection("ClubeFlexApi");
@@ -48,16 +45,16 @@ public class CloudSyncLogService
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                _logger.LogError($"Erro ao salvar log na nuvem: {response.StatusCode} - {errorContent}");
+                Log.Error($"Erro ao salvar log na nuvem: {response.StatusCode} - {errorContent}");
             }
             else
             {
-                _logger.LogDebug($"Log salvo na nuvem: {log.EventId} ({log.EventType})");
+                Log.Debug($"Log salvo na nuvem: {log.EventId} ({log.EventType})");
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Erro ao enviar log para nuvem");
+            Log.Error(ex, "Erro ao enviar log para nuvem");
         }
     }
 }

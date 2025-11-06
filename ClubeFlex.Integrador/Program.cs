@@ -45,7 +45,7 @@ class Program
             // Inicializar serviços
             var databaseService = new DatabaseService(connectionString);
             var apiService = new ClubeFlexApiService(apiBaseUrl, apiKey);
-            var cloudSyncLogService = new CloudSyncLogService(configuration, Log.Logger.ForContext<CloudSyncLogService>());
+            var cloudSyncLogService = new CloudSyncLogService(configuration);
             var syncService = new SyncService(databaseService, apiService, cloudSyncLogService, configuration);
 
             // Executar sincronização
