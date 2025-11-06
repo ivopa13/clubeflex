@@ -30,13 +30,10 @@ public class CloudSyncLogService
             // Mapeia event_type para o formato esperado pela tabela sync_logs
             var mappedEventType = log.EventType switch
             {
-                "fatura-criada" => "fatura",
-                "pagamento-confirmado" => "pagamento",
-                "invoice_created" => "fatura",
-                "payment_confirmed" => "pagamento",
+                "fatura-criada" or "fatura" or "invoice_created" => "invoice_created",
+                "pagamento-confirmado" or "pagamento" or "payment_confirmed" => "payment_confirmed",
                 _ => log.EventType
             };
-
             var cleanEventId = log.EventId?.Trim() ?? string.Empty;
 
             var payload = new
