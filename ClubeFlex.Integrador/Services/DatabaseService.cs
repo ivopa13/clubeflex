@@ -1,6 +1,6 @@
-using Microsoft.Data.SqlClient;
-using Serilog;
 using ClubeFlex.Integrador.Models;
+using FirebirdSql.Data.FirebirdClient;
+using Serilog;
 
 namespace ClubeFlex.Integrador.Services;
 
@@ -14,89 +14,107 @@ public class DatabaseService
     }
 
     /// <summary>
-    /// Busca faturas criadas que ainda não foram sincronizadas
-    /// ADAPTE esta query conforme a estrutura do seu banco de dados
+    /// Busca novas faturas que ainda não foram sincronizadas com sucesso
     /// </summary>
     public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync()
     {
         var invoices = new List<FaturaCriadaPayload>();
 
+        var query = @"
+            SELECT FIRST 100
+                m.NUMPED as invoice_id,
+                m.VALORTOTALNOTA as total_amount,
+                m.DATA as issued_at,
+                m.CODCLI as customer_id,
+                m.CODTRANS as specifier_id,
+                c.NOMECLI as customer_name,
+                c.CPF as customer_cpf,
+                c.CNPJ as customer_cnpj,
+                c.EMAIL as customer_email,
+                c.TELEFONE as customer_phone,
+                t.NOMETRANS as specifier_name,
+                t.CNPJ as specifier_cnpj,
+                t.EMAIL as specifier_email,
+                t.TELEFONE as specifier_phone,
+                t.CATEGORIA as specifier_role
+            FROM MOVENDA m
+            INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
+            LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODETRANS
+            WHERE NOT EXISTS (
+                SELECT 1 FROM sync_log sl
+                WHERE sl.event_id = 'FAT_' || CAST(m.NUMPED AS VARCHAR(50))
+                AND sl.event_type = 'fatura-criada'
+                AND sl.status = 'success'
+            )
+            ORDER BY m.DATA DESC";
+
         try
         {
-            using var connection = new SqlConnection(_connectionString);
+            using var connection = new FbConnection(_connectionString);
             await connection.OpenAsync();
 
-            // QUERY GENÉRICA - ADAPTE CONFORME SEU BANCO
-            var query = @"
-                SELECT TOP 100
-                    f.id AS invoice_id,
-                    f.total AS total_amount,
-                    f.data_emissao AS issued_at,
-                    c.id AS customer_id,
-                    c.nome AS customer_name,
-                    c.cpf_cnpj AS customer_doc,
-                    c.email AS customer_email,
-                    c.telefone AS customer_phone,
-                    e.id AS specifier_id,
-                    e.nome AS specifier_name,
-                    e.cpf_cnpj AS specifier_doc,
-                    e.email AS specifier_email,
-                    e.telefone AS specifier_phone,
-                    e.cargo AS specifier_role
-                FROM faturas f
-                INNER JOIN clientes c ON f.cliente_id = c.id
-                LEFT JOIN especificadores e ON f.especificador_id = e.id
-                WHERE f.id NOT IN (
-                    SELECT event_id FROM sync_log 
-                    WHERE event_type = 'fatura-criada' 
-                    AND status = 'success'
-                )
-                AND f.data_emissao >= DATEADD(DAY, -30, GETDATE())
-                ORDER BY f.data_emissao DESC";
-
-            using var command = new SqlCommand(query, connection);
+            using var command = new FbCommand(query, connection);
             using var reader = await command.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
-                var invoice = new FaturaCriadaPayload
+                var invoiceId = reader["invoice_id"].ToString() ?? "";
+                var eventId = $"FAT_{invoiceId}";
+
+                // Determina qual documento usar (CPF ou CNPJ)
+                var customerDoc = !reader.IsDBNull(reader.GetOrdinal("customer_cpf")) && 
+                                  !string.IsNullOrWhiteSpace(reader["customer_cpf"].ToString())
+                    ? reader["customer_cpf"].ToString()!.Trim()
+                    : reader["customer_cnpj"].ToString()!.Trim();
+
+                var payload = new FaturaCriadaPayload
                 {
-                    EventId = $"INV-{reader["invoice_id"]}-{DateTime.UtcNow.Ticks}",
-                    InvoiceIdExt = reader["invoice_id"].ToString() ?? string.Empty,
+                    EventId = eventId,
+                    InvoiceIdExt = invoiceId,
                     TotalAmount = Convert.ToDecimal(reader["total_amount"]),
-                    IssuedAt = Convert.ToDateTime(reader["issued_at"]).ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    IssuedAt = Convert.ToDateTime(reader["issued_at"]).ToString("yyyy-MM-dd"),
                     Customer = new CustomerData
                     {
-                        IdExt = reader["customer_id"].ToString() ?? string.Empty,
-                        Name = reader["customer_name"].ToString() ?? string.Empty,
-                        Doc = reader["customer_doc"].ToString() ?? string.Empty,
-                        Email = reader["customer_email"] as string,
-                        Phone = reader["customer_phone"] as string
+                        IdExt = reader["customer_id"].ToString()!,
+                        Name = reader["customer_name"].ToString()!,
+                        Doc = customerDoc,
+                        Email = reader.IsDBNull(reader.GetOrdinal("customer_email")) 
+                            ? null 
+                            : reader["customer_email"].ToString(),
+                        Phone = reader.IsDBNull(reader.GetOrdinal("customer_phone")) 
+                            ? null 
+                            : reader["customer_phone"].ToString()
                     }
                 };
 
-                // Adicionar especificador se existir
-                if (reader["specifier_id"] != DBNull.Value)
+                // Se houver especificador (transportadora), adiciona ao payload
+                if (!reader.IsDBNull(reader.GetOrdinal("specifier_id")))
                 {
-                    invoice.Specifier = new SpecifierData
+                    payload.Specifier = new SpecifierData
                     {
-                        IdExt = reader["specifier_id"].ToString() ?? string.Empty,
-                        Name = reader["specifier_name"].ToString() ?? string.Empty,
-                        Doc = reader["specifier_doc"].ToString() ?? string.Empty,
-                        Email = reader["specifier_email"] as string,
-                        Phone = reader["specifier_phone"] as string,
-                        Role = reader["specifier_role"]?.ToString() ?? "profissional"
+                        IdExt = reader["specifier_id"].ToString()!,
+                        Name = reader["specifier_name"].ToString()!,
+                        Doc = reader["specifier_cnpj"].ToString()!.Trim(),
+                        Email = reader.IsDBNull(reader.GetOrdinal("specifier_email")) 
+                            ? null 
+                            : reader["specifier_email"].ToString(),
+                        Phone = reader.IsDBNull(reader.GetOrdinal("specifier_phone")) 
+                            ? null 
+                            : reader["specifier_phone"].ToString(),
+                        Role = reader.IsDBNull(reader.GetOrdinal("specifier_role")) 
+                            ? "profissional" 
+                            : reader["specifier_role"].ToString()!
                     };
                 }
 
-                invoices.Add(invoice);
+                invoices.Add(payload);
             }
 
-            Log.Information($"Encontradas {invoices.Count} faturas novas para sincronizar");
+            Log.Information($"Encontradas {invoices.Count} novas faturas para sincronizar");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Erro ao buscar faturas do banco local");
+            Log.Error(ex, "Erro ao buscar faturas do banco de dados");
             throw;
         }
 
@@ -104,56 +122,57 @@ public class DatabaseService
     }
 
     /// <summary>
-    /// Busca pagamentos confirmados que ainda não foram sincronizados
-    /// ADAPTE esta query conforme a estrutura do seu banco de dados
+    /// Busca novos pagamentos confirmados que ainda não foram sincronizados
     /// </summary>
     public async Task<List<PagamentoPayload>> GetNewPaymentsAsync()
     {
         var payments = new List<PagamentoPayload>();
 
+        var query = @"
+            SELECT FIRST 100
+                cr.CODREC as payment_id,
+                cr.ID as invoice_id,
+                cr.VALOR as paid_amount,
+                cr.DATA as paid_at
+            FROM CONTARECEBERREC cr
+            WHERE cr.VALOR > 0
+            AND NOT EXISTS (
+                SELECT 1 FROM sync_log sl
+                WHERE sl.event_id = 'PAG_' || CAST(cr.CODREC AS VARCHAR(50))
+                AND sl.event_type = 'pagamento-confirmado'
+                AND sl.status = 'success'
+            )
+            ORDER BY cr.DATA DESC";
+
         try
         {
-            using var connection = new SqlConnection(_connectionString);
+            using var connection = new FbConnection(_connectionString);
             await connection.OpenAsync();
 
-            // QUERY GENÉRICA - ADAPTE CONFORME SEU BANCO
-            var query = @"
-                SELECT TOP 100
-                    p.id AS payment_id,
-                    p.fatura_id AS invoice_id,
-                    p.valor_pago AS paid_amount,
-                    p.data_pagamento AS paid_at
-                FROM pagamentos p
-                WHERE p.id NOT IN (
-                    SELECT event_id FROM sync_log 
-                    WHERE event_type = 'pagamento-confirmado' 
-                    AND status = 'success'
-                )
-                AND p.status = 'confirmado'
-                AND p.data_pagamento >= DATEADD(DAY, -30, GETDATE())
-                ORDER BY p.data_pagamento DESC";
-
-            using var command = new SqlCommand(query, connection);
+            using var command = new FbCommand(query, connection);
             using var reader = await command.ExecuteReaderAsync();
 
             while (await reader.ReadAsync())
             {
-                var payment = new PagamentoPayload
+                var paymentId = reader["payment_id"].ToString() ?? "";
+                var eventId = $"PAG_{paymentId}";
+
+                var payload = new PagamentoPayload
                 {
-                    EventId = $"PAY-{reader["payment_id"]}-{DateTime.UtcNow.Ticks}",
-                    InvoiceIdExt = reader["invoice_id"].ToString() ?? string.Empty,
+                    EventId = eventId,
+                    InvoiceIdExt = reader["invoice_id"].ToString()!,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
-                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-ddTHH:mm:ssZ")
+                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd")
                 };
 
-                payments.Add(payment);
+                payments.Add(payload);
             }
 
-            Log.Information($"Encontrados {payments.Count} pagamentos novos para sincronizar");
+            Log.Information($"Encontrados {payments.Count} novos pagamentos para sincronizar");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Erro ao buscar pagamentos do banco local");
+            Log.Error(ex, "Erro ao buscar pagamentos do banco de dados");
             throw;
         }
 
@@ -161,62 +180,53 @@ public class DatabaseService
     }
 
     /// <summary>
-    /// Registra evento no log de sincronização
+    /// Salva ou atualiza um registro de log de sincronização
     /// </summary>
     public async Task SaveSyncLogAsync(SyncLog log)
     {
+        var query = @"
+            UPDATE OR INSERT INTO sync_log (event_id, event_type, status, payload, error_message, attempts, created_at, updated_at)
+            VALUES (@event_id, @event_type, @status, @payload, @error_message, @attempts, @created_at, @updated_at)
+            MATCHING (event_id, event_type)";
+
         try
         {
-            using var connection = new SqlConnection(_connectionString);
+            using var connection = new FbConnection(_connectionString);
             await connection.OpenAsync();
 
-            var query = @"
-                IF EXISTS (SELECT 1 FROM sync_log WHERE event_id = @EventId)
-                BEGIN
-                    UPDATE sync_log 
-                    SET status = @Status,
-                        error_message = @ErrorMessage,
-                        attempts = attempts + 1,
-                        updated_at = GETDATE()
-                    WHERE event_id = @EventId
-                END
-                ELSE
-                BEGIN
-                    INSERT INTO sync_log (event_id, event_type, status, payload, error_message, attempts)
-                    VALUES (@EventId, @EventType, @Status, @Payload, @ErrorMessage, @Attempts)
-                END";
-
-            using var command = new SqlCommand(query, connection);
-            command.Parameters.AddWithValue("@EventId", log.EventId);
-            command.Parameters.AddWithValue("@EventType", log.EventType);
-            command.Parameters.AddWithValue("@Status", log.Status);
-            command.Parameters.AddWithValue("@Payload", (object?)log.Payload ?? DBNull.Value);
-            command.Parameters.AddWithValue("@ErrorMessage", (object?)log.ErrorMessage ?? DBNull.Value);
-            command.Parameters.AddWithValue("@Attempts", log.Attempts);
+            using var command = new FbCommand(query, connection);
+            command.Parameters.AddWithValue("@event_id", log.EventId);
+            command.Parameters.AddWithValue("@event_type", log.EventType);
+            command.Parameters.AddWithValue("@status", log.Status);
+            command.Parameters.AddWithValue("@payload", log.Payload ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@error_message", log.ErrorMessage ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@attempts", log.Attempts);
+            command.Parameters.AddWithValue("@created_at", log.CreatedAt);
+            command.Parameters.AddWithValue("@updated_at", DateTime.Now);
 
             await command.ExecuteNonQueryAsync();
         }
         catch (Exception ex)
         {
-            Log.Error(ex, $"Erro ao salvar log de sincronização para event_id: {log.EventId}");
+            Log.Error(ex, $"Erro ao salvar log de sincronização para evento {log.EventId}");
         }
     }
 
     /// <summary>
-    /// Testa conexão com o banco de dados
+    /// Testa a conexão com o banco de dados
     /// </summary>
     public async Task<bool> TestConnectionAsync()
     {
         try
         {
-            using var connection = new SqlConnection(_connectionString);
+            using var connection = new FbConnection(_connectionString);
             await connection.OpenAsync();
-            Log.Information("✓ Conexão com banco de dados local estabelecida");
+            Log.Information("✅ Conexão com Firebird estabelecida com sucesso!");
             return true;
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "✗ Falha ao conectar com banco de dados local");
+            Log.Error(ex, "❌ Erro ao conectar no banco de dados Firebird");
             return false;
         }
     }

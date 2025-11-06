@@ -1,19 +1,20 @@
-# Clube Flex - Integrador Windows
+# Clube Flex - Integrador Windows (CPlus 4.10)
 
-Console Application para sincronizar dados do seu sistema local com o Clube Flex.
+Console Application para sincronizar dados do **CPlus 4.10** com o Clube Flex.
 
 ## 📋 Pré-requisitos
 
 - Windows Server ou Windows 10/11
 - .NET 6.0 Runtime ou SDK ([Download](https://dotnet.microsoft.com/download/dotnet/6.0))
-- SQL Server (local ou remoto)
+- **CPlus 4.10** com banco de dados **Firebird**
 - Acesso ao banco de dados com permissões de leitura
+- Ferramenta para executar SQL no Firebird: [FlameRobin](https://flamerobin.org/) ou IBExpert
 
 ## 🚀 Instalação
 
-### 1. Configurar Banco de Dados Local
+### 1. Configurar Banco de Dados Firebird
 
-Execute o script SQL no seu banco de dados:
+Execute o script SQL no seu banco de dados **Firebird** usando **FlameRobin** ou **IBExpert**:
 
 ```bash
 Scripts/create-sync-log.sql
@@ -21,18 +22,23 @@ Scripts/create-sync-log.sql
 
 Isso criará a tabela `sync_log` necessária para controle de sincronização.
 
+**Como executar:**
+1. Abra o FlameRobin
+2. Conecte no banco do CPlus
+3. Execute o script `create-sync-log.sql`
+
 ### 2. Configurar appsettings.json
 
-Edite o arquivo `appsettings.json` com suas configurações:
+Edite o arquivo `appsettings.json` com suas configurações do **Firebird**:
 
 ```json
 {
   "ConnectionStrings": {
-    "LocalDatabase": "Server=SEU_SERVIDOR;Database=SEU_BANCO;User Id=SEU_USUARIO;Password=SUA_SENHA;TrustServerCertificate=True;"
+    "LocalDatabase": "DataSource=localhost;Database=C:\\CPLUS\\DADOS\\BANCO.FDB;User=SYSDBA;Password=masterkey;Charset=WIN1252;ServerType=0;"
   },
   "ClubeFlexApi": {
     "BaseUrl": "https://skhljdaqfzweshjrlcnn.supabase.co/functions/v1",
-    "ApiKey": "sua_api_key_aqui"
+    "ApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNraGxqZGFxZnp3ZXNoanJsY25uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTM0NTAsImV4cCI6MjA3Njc4OTQ1MH0.YZCXrpR3Cz-MXsVXi6aBlbAeN0E2DSmyCspMLuM_j-M"
   },
   "SyncSettings": {
     "BatchSize": 100,
@@ -42,20 +48,30 @@ Edite o arquivo `appsettings.json` com suas configurações:
 }
 ```
 
-### 3. Adaptar Queries do Banco de Dados
+**⚠️ IMPORTANTE - Parâmetros Firebird:**
+- `DataSource`: IP/hostname do servidor Firebird (localhost se local)
+- `Database`: Caminho completo do arquivo .FDB do CPlus
+- `User`: Usuário do Firebird (padrão: SYSDBA)
+- `Password`: Senha do Firebird (padrão: masterkey)
+- `Charset`: WIN1252 (comum no CPlus)
+- `ServerType`: 0 (Firebird 2.5+)
 
-**IMPORTANTE**: Edite os arquivos abaixo para corresponder à estrutura do seu banco:
+### 3. Mapeamento CPlus → Clube Flex
 
-#### Services/DatabaseService.cs
+O código já está **pré-configurado** para o CPlus 4.10 com a seguinte estrutura:
 
-**Método `GetNewInvoicesAsync()`** - Linha 30:
-- Ajuste os nomes das tabelas (`faturas`, `clientes`, `especificadores`)
-- Ajuste os nomes das colunas conforme seu banco
-- Ajuste as condições WHERE conforme sua regra de negócio
+#### Tabelas Utilizadas:
+| Tabela CPlus | Usado Para | Colunas Principais |
+|---|---|---|
+| **MOVENDA** | Faturas/Vendas | NUMPED, VALORTOTALNOTA, DATA, CODCLI, CODTRANS |
+| **CLIENTE** | Clientes | CODCLI, NOMECLI, CPF, CNPJ, EMAIL, TELEFONE |
+| **TRANSPORTADORA** | Especificadores | CODETRANS, NOMETRANS, CNPJ, EMAIL, TELEFONE, CATEGORIA |
+| **CONTARECEBERREC** | Pagamentos | CODREC, ID, VALOR, DATA, CODCLI |
 
-**Método `GetNewPaymentsAsync()`** - Linha 95:
-- Ajuste os nomes das tabelas e colunas
-- Ajuste a condição de status do pagamento
+**✅ Não precisa alterar nada se sua estrutura do CPlus for padrão!**
+
+Se você usa campos customizados ou tabelas diferentes, edite:
+- `Services/DatabaseService.cs` → Métodos `GetNewInvoicesAsync()` e `GetNewPaymentsAsync()`
 
 ### 4. Compilar o Projeto
 
@@ -156,14 +172,15 @@ schtasks /Delete /TN "ClubeFlexSync" /F
 
 ## 🔧 Troubleshooting
 
-### Erro de Conexão com Banco de Dados
+### Erro de Conexão com Firebird
 
-**Erro**: `A network-related or instance-specific error...`
+**Erro**: `Unable to complete network request` ou `Connection refused`
 
 **Solução**:
-1. Verifique se o SQL Server está rodando
-2. Verifique a connection string no `appsettings.json`
-3. Teste conexão: `sqlcmd -S servidor -U usuario -P senha`
+1. Verifique se o **Firebird Server** está rodando (Serviços Windows → `FirebirdServerDefaultInstance`)
+2. Confirme o caminho do arquivo `.FDB` no `appsettings.json`
+3. Teste com FlameRobin se consegue conectar com as mesmas credenciais
+4. Verifique se o arquivo `.FDB` não está bloqueado por outro processo
 
 ### Erro de Permissão (HTTP 401/403)
 
@@ -175,10 +192,10 @@ schtasks /Delete /TN "ClubeFlexSync" /F
 
 ### Tabela sync_log não existe
 
-**Erro**: `Invalid object name 'sync_log'`
+**Erro**: `Table unknown: SYNC_LOG`
 
 **Solução**:
-Execute o script `Scripts/create-sync-log.sql` no seu banco de dados
+Execute o script `Scripts/create-sync-log.sql` no FlameRobin ou IBExpert
 
 ### Logs não aparecem
 

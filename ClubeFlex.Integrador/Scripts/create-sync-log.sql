@@ -1,43 +1,30 @@
--- Script para criar tabela de controle de sincronização
--- Execute este script no seu banco de dados SQL Server local
+-- Script para criar a tabela sync_log no Firebird
+-- Execute este script usando FlameRobin, IBExpert ou outra ferramenta
 
--- Verificar se a tabela já existe
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'sync_log')
+CREATE TABLE sync_log (
+    id INTEGER NOT NULL,
+    event_id VARCHAR(100) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending' NOT NULL,
+    payload BLOB SUB_TYPE TEXT,
+    error_message BLOB SUB_TYPE TEXT,
+    attempts INTEGER DEFAULT 0 NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT PK_sync_log PRIMARY KEY (id),
+    CONSTRAINT UQ_sync_log_event UNIQUE (event_id, event_type)
+);
+
+CREATE GENERATOR GEN_sync_log_id;
+SET GENERATOR GEN_sync_log_id TO 0;
+
+CREATE TRIGGER sync_log_bi FOR sync_log
+ACTIVE BEFORE INSERT POSITION 0
+AS
 BEGIN
-    CREATE TABLE sync_log (
-        id INT IDENTITY(1,1) PRIMARY KEY,
-        event_id VARCHAR(100) NOT NULL,
-        event_type VARCHAR(50) NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'pending',
-        payload NVARCHAR(MAX),
-        error_message NVARCHAR(MAX),
-        attempts INT DEFAULT 0,
-        created_at DATETIME DEFAULT GETDATE(),
-        updated_at DATETIME DEFAULT GETDATE(),
-        CONSTRAINT UK_sync_log_event_id UNIQUE (event_id)
-    );
+    IF (NEW.id IS NULL) THEN
+        NEW.id = GEN_ID(GEN_sync_log_id, 1);
+END;
 
-    -- Criar índices para performance
-    CREATE INDEX IX_sync_log_event_type_status 
-    ON sync_log(event_type, status);
-
-    CREATE INDEX IX_sync_log_created_at 
-    ON sync_log(created_at);
-
-    PRINT 'Tabela sync_log criada com sucesso!';
-END
-ELSE
-BEGIN
-    PRINT 'Tabela sync_log já existe';
-END
-GO
-
--- Comentários sobre os campos:
--- event_id: Identificador único do evento (usado para idempotência)
--- event_type: Tipo do evento ('fatura-criada' ou 'pagamento-confirmado')
--- status: Status da sincronização ('pending', 'success', 'error')
--- payload: JSON do payload enviado (para auditoria)
--- error_message: Mensagem de erro caso a sincronização falhe
--- attempts: Número de tentativas de envio
--- created_at: Data/hora da primeira tentativa
--- updated_at: Data/hora da última atualização
+CREATE INDEX IDX_sync_log_status ON sync_log(status);
+CREATE INDEX IDX_sync_log_event ON sync_log(event_id, event_type);
