@@ -8,6 +8,7 @@ public class SyncService
 {
     private readonly DatabaseService _databaseService;
     private readonly ClubeFlexApiService _apiService;
+    private readonly CloudSyncLogService _cloudSyncLogService;
     private readonly int _maxRetries;
     private readonly int _retryDelaySeconds;
     private readonly bool _testMode;
@@ -17,10 +18,12 @@ public class SyncService
     public SyncService(
         DatabaseService databaseService,
         ClubeFlexApiService apiService,
+        CloudSyncLogService cloudSyncLogService,
         IConfiguration configuration)
     {
         _databaseService = databaseService;
         _apiService = apiService;
+        _cloudSyncLogService = cloudSyncLogService;
         _maxRetries = int.TryParse(configuration["SyncSettings:RetryAttempts"], out var retries) ? retries : 3;
         _retryDelaySeconds = int.TryParse(configuration["SyncSettings:RetryDelaySeconds"], out var delay) ? delay : 30;
         _testMode = bool.TryParse(configuration["SyncSettings:TestMode"], out var testMode) && testMode;
@@ -100,7 +103,7 @@ public class SyncService
                     Attempts = result ? 1 : _maxRetries
                 };
 
-                await _databaseService.SaveSyncLogAsync(log);
+                await _cloudSyncLogService.SaveSyncLogAsync(log);
 
                 if (result)
                     success++;
@@ -152,7 +155,7 @@ public class SyncService
                     Attempts = result ? 1 : _maxRetries
                 };
 
-                await _databaseService.SaveSyncLogAsync(log);
+                await _cloudSyncLogService.SaveSyncLogAsync(log);
 
                 if (result)
                     success++;
