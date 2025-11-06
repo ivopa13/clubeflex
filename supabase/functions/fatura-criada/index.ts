@@ -65,6 +65,9 @@ Deno.serve(async (req) => {
       .upsert({
         customer_id_ext: customer.id_ext,
         name: customer.name,
+        doc: customer.doc,
+        email: customer.email ?? null,
+        phone: customer.phone ?? null,
         status: 'active',
       }, {
         onConflict: 'customer_id_ext',
@@ -85,6 +88,9 @@ Deno.serve(async (req) => {
         .upsert({
           specifier_id_ext: specifier.id_ext,
           name: specifier.name,
+          doc: specifier.doc,
+          email: specifier.email ?? null,
+          phone: specifier.phone ?? null,
           role: specifier.role,
           status: 'active',
         }, {
