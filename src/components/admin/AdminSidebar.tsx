@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut } from "lucide-react";
+import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -21,6 +21,7 @@ const menuItems = [
   { title: "Resgates", icon: ShoppingBag, path: "/admin/resgates" },
   { title: "Faturas", icon: FileText, path: "/admin/faturas" },
   { title: "Relatórios", icon: BarChart3, path: "/admin/relatorios" },
+  { title: "Logs Integração", icon: Database, path: "/admin/logs" },
 ];
 
 export const AdminSidebar = () => {

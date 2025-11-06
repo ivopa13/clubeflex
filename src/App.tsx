@@ -21,6 +21,7 @@ import AdminProdutos from "./pages/admin/AdminProdutos";
 import AdminResgates from "./pages/admin/AdminResgates";
 import AdminFaturas from "./pages/admin/AdminFaturas";
 import AdminRelatorios from "./pages/admin/AdminRelatorios";
+import AdminSyncLogs from "./pages/admin/AdminSyncLogs";
 
 const queryClient = new QueryClient();
 
@@ -153,6 +154,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminRelatorios />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/logs"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminSyncLogs />
                 </AdminLayout>
               </AuthGuard>
             }
