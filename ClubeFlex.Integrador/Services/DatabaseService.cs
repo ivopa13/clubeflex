@@ -133,7 +133,7 @@ public class DatabaseService
         var query = $@"
             SELECT FIRST {batchSize}
                 cr.CODREC as payment_id,
-                cr.ID as invoice_id,
+                cr.CODCR as invoice_id,
                 cr.VALOR as paid_amount,
                 cr.DATA as paid_at
             FROM CONTARECEBERREC cr
