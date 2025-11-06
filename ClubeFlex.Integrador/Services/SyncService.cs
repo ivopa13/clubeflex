@@ -18,8 +18,8 @@ public class SyncService
     {
         _databaseService = databaseService;
         _apiService = apiService;
-        _maxRetries = configuration.GetValue<int>("SyncSettings:RetryAttempts", 3);
-        _retryDelaySeconds = configuration.GetValue<int>("SyncSettings:RetryDelaySeconds", 30);
+        _maxRetries = int.TryParse(configuration["SyncSettings:RetryAttempts"], out var retries) ? retries : 3;
+        _retryDelaySeconds = int.TryParse(configuration["SyncSettings:RetryDelaySeconds"], out var delay) ? delay : 30;
     }
 
     /// <summary>
