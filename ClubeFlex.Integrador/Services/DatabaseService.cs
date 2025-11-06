@@ -34,15 +34,9 @@ public class DatabaseService
                 c.CPF as customer_cpf,
                 c.CNPJ as customer_cnpj,
                 c.EMAIL as customer_email,
-                c.TELEFONE as customer_phone,
-                t.NOMETRANS as specifier_name,
-                t.CNPJ as specifier_cnpj,
-                t.EMAIL as specifier_email,
-                t.TELEFONE as specifier_phone,
-                t.CATEGORIA as specifier_role
+                c.TELEFONE as customer_phone
             FROM MOVENDA m
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
-            LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
             WHERE 1=1
             {dateFilter}
             ORDER BY m.DATA DESC";
@@ -89,20 +83,15 @@ public class DatabaseService
                 // Se houver especificador (transportadora), adiciona ao payload
                 if (!reader.IsDBNull(reader.GetOrdinal("specifier_id")))
                 {
+                    // Dados de transportadora são opcionais. Se não houver join/tabela, envia apenas o ID externo
                     payload.Specifier = new SpecifierData
                     {
                         IdExt = reader["specifier_id"].ToString()!,
-                        Name = reader["specifier_name"].ToString()!,
-                        Doc = reader["specifier_cnpj"].ToString()!.Trim(),
-                        Email = reader.IsDBNull(reader.GetOrdinal("specifier_email")) 
-                            ? null 
-                            : reader["specifier_email"].ToString(),
-                        Phone = reader.IsDBNull(reader.GetOrdinal("specifier_phone")) 
-                            ? null 
-                            : reader["specifier_phone"].ToString(),
-                        Role = reader.IsDBNull(reader.GetOrdinal("specifier_role")) 
-                            ? "profissional" 
-                            : reader["specifier_role"].ToString()!
+                        Name = string.Empty,
+                        Doc = string.Empty,
+                        Email = null,
+                        Phone = null,
+                        Role = "profissional"
                     };
                 }
 
