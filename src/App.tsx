@@ -23,6 +23,7 @@ import AdminFaturas from "./pages/admin/AdminFaturas";
 import AdminRelatorios from "./pages/admin/AdminRelatorios";
 import AdminSyncLogs from "./pages/admin/AdminSyncLogs";
 import AdminValidationErrors from "./pages/admin/AdminValidationErrors";
+import AdminPagamentos from "./pages/admin/AdminPagamentos";
 
 const queryClient = new QueryClient();
 
@@ -145,6 +146,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminFaturas />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/pagamentos"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminPagamentos />
                 </AdminLayout>
               </AuthGuard>
             }

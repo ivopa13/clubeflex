@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle } from "lucide-react";
+import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -20,6 +20,7 @@ const menuItems = [
   { title: "Catálogo", icon: Package, path: "/admin/produtos" },
   { title: "Resgates", icon: ShoppingBag, path: "/admin/resgates" },
   { title: "Faturas", icon: FileText, path: "/admin/faturas" },
+  { title: "Pagamentos", icon: DollarSign, path: "/admin/pagamentos" },
   { title: "Relatórios", icon: BarChart3, path: "/admin/relatorios" },
   { title: "Logs Integração", icon: Database, path: "/admin/logs" },
   { title: "Erros de Validação", icon: AlertTriangle, path: "/admin/erros-validacao" },
