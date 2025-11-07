@@ -67,7 +67,12 @@ function validarCNPJ(cnpj: string): boolean {
 }
 
 // Validação de documento (CPF ou CNPJ)
-function validarDocumento(doc: string): boolean {
+function validarDocumento(doc: string | null | undefined): boolean {
+  // Se não tem documento ou é "N", é inválido
+  if (!doc || doc.trim() === '' || doc === 'N') {
+    return false;
+  }
+  
   const cleanDoc = doc.replace(/[^\d]/g, '');
   if (cleanDoc.length === 11) {
     return validarCPF(doc);
@@ -136,7 +141,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!customer.doc || !validarDocumento(customer.doc)) {
+    if (!validarDocumento(customer.doc)) {
       console.error('Validação falhou: CPF/CNPJ do cliente inválido:', customer.doc);
       
       // Registrar erro de validação
@@ -146,11 +151,11 @@ Deno.serve(async (req) => {
         error_type: 'invalid_cpf_cnpj',
         entity_type: 'customer',
         received_data: customer,
-        error_details: `CPF/CNPJ inválido: ${customer.doc || 'não fornecido'}`,
+        error_details: `Cliente deve ter CPF ou CNPJ válido. Recebido: ${customer.doc || 'não fornecido'}. Obs: "N" não é um documento válido.`,
       });
       
       return new Response(
-        JSON.stringify({ ok: false, error: 'CPF/CNPJ do cliente inválido ou ausente', validation_error: true }),
+        JSON.stringify({ ok: false, error: 'Cliente deve ter CPF ou CNPJ válido', validation_error: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -176,7 +181,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      if (!specifier.doc || !validarDocumento(specifier.doc)) {
+      if (!validarDocumento(specifier.doc)) {
         console.error('Validação falhou: CPF/CNPJ do especificador inválido:', specifier.doc);
         
         // Registrar erro de validação
@@ -186,11 +191,11 @@ Deno.serve(async (req) => {
           error_type: 'invalid_cpf_cnpj',
           entity_type: 'specifier',
           received_data: specifier,
-          error_details: `CPF/CNPJ inválido: ${specifier.doc || 'não fornecido'}`,
+          error_details: `Especificador deve ter CPF ou CNPJ válido. Recebido: ${specifier.doc || 'não fornecido'}. Obs: "N" não é um documento válido.`,
         });
         
         return new Response(
-          JSON.stringify({ ok: false, error: 'CPF/CNPJ do especificador inválido ou ausente', validation_error: true }),
+          JSON.stringify({ ok: false, error: 'Especificador deve ter CPF ou CNPJ válido', validation_error: true }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         );
       }
