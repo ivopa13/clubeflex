@@ -248,27 +248,36 @@ Deno.serve(async (req) => {
       }
 
       // Validar documento do especificador (suporta doc único ou cpf/cnpj separados)
+      // OPCIONAL: Se não tem nenhum documento, aceita sem validar
       const specifierCpf = specifier.cpf || (specifier.doc && specifier.doc.replace(/[^\d]/g, '').length === 11 ? specifier.doc : null);
       const specifierCnpj = specifier.cnpj || (specifier.doc && specifier.doc.replace(/[^\d]/g, '').length === 14 ? specifier.doc : null);
-      specifierDocValidation = validarDocumentos(specifierCpf, specifierCnpj);
       
-      if (!specifierDocValidation.valid) {
-        console.error('Validação falhou: CPF/CNPJ do especificador inválido:', specifierDocValidation.error);
+      // Se tem algum documento, valida
+      if (specifierCpf || specifierCnpj) {
+        specifierDocValidation = validarDocumentos(specifierCpf, specifierCnpj);
         
-        // Registrar erro de validação
-        await supabase.from('validation_errors').insert({
-          event_id: event_id,
-          event_type: 'invoice_created',
-          error_type: 'invalid_cpf_cnpj',
-          entity_type: 'specifier',
-          received_data: specifier,
-          error_details: specifierDocValidation.error,
-        });
-        
-        return new Response(
-          JSON.stringify({ ok: false, error: 'Especificador deve ter CPF ou CNPJ válido', validation_error: true }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
-        );
+        if (!specifierDocValidation.valid) {
+          console.error('Validação falhou: CPF/CNPJ do especificador inválido:', specifierDocValidation.error);
+          
+          // Registrar erro de validação
+          await supabase.from('validation_errors').insert({
+            event_id: event_id,
+            event_type: 'invoice_created',
+            error_type: 'invalid_cpf_cnpj',
+            entity_type: 'specifier',
+            received_data: specifier,
+            error_details: specifierDocValidation.error,
+          });
+          
+          return new Response(
+            JSON.stringify({ ok: false, error: 'Especificador deve ter CPF ou CNPJ válido', validation_error: true }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
+      } else {
+        // Se não tem documento, aceita (especificadores podem não ter CPF/CNPJ)
+        console.log('Especificador sem documento - permitido');
+        specifierDocValidation = { valid: true, doc: null };
       }
     }
 
@@ -326,7 +335,7 @@ Deno.serve(async (req) => {
         .upsert({
           specifier_id_ext: specifier.id_ext,
           name: specifier.name,
-          doc: specifierDocValidation.doc!, // Usar o documento validado
+          doc: specifierDocValidation.doc || 'N/A', // Usar documento validado ou N/A se não tem
           email: specifier.email ?? null,
           phone: specifier.phone ?? null,
           role: specifier.role,

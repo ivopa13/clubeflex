@@ -48,8 +48,6 @@ public class DatabaseService
                 c.EMAIL as customer_email,
                 c.TELEFONE as customer_phone,
                 t.NOMETRANS as specifier_name,
-                t.CPFCNPJ as specifier_cpf,
-                t.CNPJ as specifier_cnpj,
                 t.CATEGORIA as specifier_category
             FROM MOVENDA m
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
@@ -117,21 +115,14 @@ public class DatabaseService
                         ? "profissional" 
                         : reader["specifier_category"].ToString()!;
 
-                    // Obter CPF e CNPJ do especificador (envia ambos, mesmo que sejam "N")
-                    var specifierCpf = reader.IsDBNull(reader.GetOrdinal("specifier_cpf")) 
-                        ? null 
-                        : reader["specifier_cpf"].ToString()?.Trim();
-                    
-                    var specifierCnpj = reader.IsDBNull(reader.GetOrdinal("specifier_cnpj")) 
-                        ? null 
-                        : reader["specifier_cnpj"].ToString()?.Trim();
-
+                    // Especificadores não têm CPF/CNPJ na tabela TRANSPORTADORA
+                    // Enviamos null para que a validação não seja aplicada
                     payload.Specifier = new SpecifierData
                     {
                         IdExt = reader["specifier_id"].ToString()!,
                         Name = specifierName,
-                        Cpf = specifierCpf,
-                        Cnpj = specifierCnpj,
+                        Cpf = null,
+                        Cnpj = null,
                         Email = null,
                         Phone = null,
                         Role = specifierCategory
