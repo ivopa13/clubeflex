@@ -86,6 +86,7 @@ interface InvoicePayload {
   event_id: string;
   source: string;
   invoice_id_ext: string;
+  order_number?: string;
   total_amount: number;
   issued_at: string;
   customer: {
@@ -119,7 +120,7 @@ Deno.serve(async (req) => {
     const payload: InvoicePayload = await req.json();
     console.log('Received invoice_created webhook:', payload);
 
-    const { event_id, invoice_id_ext, total_amount, customer, specifier } = payload;
+    const { event_id, invoice_id_ext, order_number, total_amount, customer, specifier } = payload;
 
     // Validar dados do cliente
     if (!customer.name || customer.name.trim() === '') {
@@ -286,6 +287,7 @@ Deno.serve(async (req) => {
       .from('invoices')
       .insert({
         invoice_id_ext: invoice_id_ext,
+        order_number: order_number || null,
         customer_id: customerData.id,
         specifier_id: specifierId,
         total_amount: total_amount,

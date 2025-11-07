@@ -24,11 +24,12 @@ const AdminFaturas = () => {
     },
   });
 
-  const statusMap = {
-    created: { label: "Criada", variant: "secondary" as const, className: "" },
-    partially_paid: { label: "Parcial", variant: "default" as const, className: "" },
-    paid: { label: "Paga", variant: "default" as const, className: "bg-green-500 text-white hover:bg-green-600" },
-    canceled: { label: "Cancelada", variant: "destructive" as const, className: "" },
+  const getStatusLabel = (status: string, releasedCustomer: number, releasedSpecifier: number) => {
+    const totalReleased = Number(releasedCustomer) + Number(releasedSpecifier);
+    if (totalReleased > 0) {
+      return { label: "Disponível", variant: "default" as const, className: "bg-green-500 text-white hover:bg-green-600" };
+    }
+    return { label: "Pendente", variant: "secondary" as const, className: "" };
   };
 
   return (
@@ -47,43 +48,38 @@ const AdminFaturas = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>ID Externo</TableHead>
+                  <TableHead>Nº Pedido</TableHead>
+                  <TableHead>Código</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Especificador</TableHead>
                   <TableHead>Valor</TableHead>
-                  <TableHead>Pendente (C)</TableHead>
-                  <TableHead>Liberado (C)</TableHead>
-                  <TableHead>Pendente (E)</TableHead>
-                  <TableHead>Liberado (E)</TableHead>
-                  <TableHead>Total Liberado</TableHead>
+                  <TableHead>Total de Pontos</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Data</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {invoices?.map((invoice: any) => {
-                  const status = statusMap[invoice.status as keyof typeof statusMap];
+                  const status = getStatusLabel(
+                    invoice.status,
+                    invoice.released_points_customer,
+                    invoice.released_points_specifier
+                  );
+                  
+                  const totalPoints = Number(invoice.pending_points_customer) + 
+                                     Number(invoice.released_points_customer) + 
+                                     Number(invoice.pending_points_specifier) + 
+                                     Number(invoice.released_points_specifier);
                   
                   return (
                     <TableRow key={invoice.id}>
+                      <TableCell className="font-mono text-sm">{invoice.order_number || "-"}</TableCell>
                       <TableCell className="font-mono text-sm">{invoice.invoice_id_ext}</TableCell>
                       <TableCell className="font-medium">{invoice.customer?.name || "N/A"}</TableCell>
                       <TableCell>{invoice.specifier?.name || "-"}</TableCell>
                       <TableCell>R$ {Number(invoice.total_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-pending">
-                        {Number(invoice.pending_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
-                      </TableCell>
-                      <TableCell className="text-redeemable">
-                        {Number(invoice.released_points_customer).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
-                      </TableCell>
-                      <TableCell className="text-pending">
-                        {Number(invoice.pending_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
-                      </TableCell>
-                      <TableCell className="text-redeemable">
-                        {Number(invoice.released_points_specifier).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
-                      </TableCell>
-                      <TableCell className="font-bold text-redeemable">
-                        {(Number(invoice.released_points_customer) + Number(invoice.released_points_specifier)).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
+                      <TableCell className="font-bold">
+                        {totalPoints.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
                       </TableCell>
                       <TableCell>
                         <Badge variant={status.variant} className={status.className}>{status.label}</Badge>

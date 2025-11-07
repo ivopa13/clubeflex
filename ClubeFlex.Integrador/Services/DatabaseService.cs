@@ -37,6 +37,7 @@ public class DatabaseService
         var query = $@"
             SELECT FIRST {batchSize}
                 m.CODMOVENDA as invoice_id,
+                m.NUMPED as order_number,
                 m.VALORTOTALNOTA as total_amount,
                 m.DATA as issued_at,
                 m.CODCLI as customer_id,
@@ -74,10 +75,15 @@ public class DatabaseService
                     ? reader["customer_cpf"].ToString()!.Trim()
                     : reader["customer_cnpj"].ToString()!.Trim();
 
+                var orderNumber = reader.IsDBNull(reader.GetOrdinal("order_number")) 
+                    ? null 
+                    : reader["order_number"].ToString();
+
                 var payload = new FaturaCriadaPayload
                 {
                     EventId = eventId,
                     InvoiceIdExt = invoiceId,
+                    OrderNumber = orderNumber,
                     TotalAmount = Convert.ToDecimal(reader["total_amount"]),
                     IssuedAt = Convert.ToDateTime(reader["issued_at"]).ToString("yyyy-MM-dd"),
                     Customer = new CustomerData

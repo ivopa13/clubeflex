@@ -13,6 +13,9 @@ public class FaturaCriadaPayload
     [JsonProperty("invoice_id_ext")]
     public string InvoiceIdExt { get; set; } = string.Empty;
 
+    [JsonProperty("order_number")]
+    public string? OrderNumber { get; set; }
+
     [JsonProperty("total_amount")]
     public decimal TotalAmount { get; set; }
 
