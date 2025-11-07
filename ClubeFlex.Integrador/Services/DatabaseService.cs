@@ -36,7 +36,7 @@ public class DatabaseService
 
         var query = $@"
             SELECT FIRST {batchSize}
-                m.NUMPED as invoice_id,
+                m.CODMOVENDA as invoice_id,
                 m.VALORTOTALNOTA as total_amount,
                 m.DATA as issued_at,
                 m.CODCLI as customer_id,
@@ -45,9 +45,12 @@ public class DatabaseService
                 c.CPF as customer_cpf,
                 c.CNPJ as customer_cnpj,
                 c.EMAIL as customer_email,
-                c.TELEFONE as customer_phone
+                c.TELEFONE as customer_phone,
+                t.NOMETRANS as specifier_name,
+                t.CATEGORIA as specifier_category
             FROM MOVENDA m
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
+            LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
             WHERE 1=1
             {dateFilter}
             ORDER BY m.DATA DESC";
@@ -94,15 +97,22 @@ public class DatabaseService
                 // Se houver especificador (transportadora), adiciona ao payload
                 if (!reader.IsDBNull(reader.GetOrdinal("specifier_id")))
                 {
-                    // Dados de transportadora são opcionais. Se não houver join/tabela, envia apenas o ID externo
+                    var specifierName = reader.IsDBNull(reader.GetOrdinal("specifier_name")) 
+                        ? string.Empty 
+                        : reader["specifier_name"].ToString()!;
+                    
+                    var specifierCategory = reader.IsDBNull(reader.GetOrdinal("specifier_category")) 
+                        ? "profissional" 
+                        : reader["specifier_category"].ToString()!;
+
                     payload.Specifier = new SpecifierData
                     {
                         IdExt = reader["specifier_id"].ToString()!,
-                        Name = string.Empty,
+                        Name = specifierName,
                         Doc = string.Empty,
                         Email = null,
                         Phone = null,
-                        Role = "profissional"
+                        Role = specifierCategory
                     };
                 }
 
@@ -132,14 +142,16 @@ public class DatabaseService
 
         var query = $@"
             SELECT FIRST {batchSize}
-                cr.CODREC as payment_id,
-                cr.CODCR as invoice_id,
-                cr.VALOR as paid_amount,
-                cr.DATA as paid_at
-            FROM CONTARECEBERREC cr
-            WHERE cr.VALOR > 0
+                crr.ID as payment_id,
+                m.CODMOVENDA as invoice_id,
+                crr.VALOR as paid_amount,
+                crr.DATA as paid_at
+            FROM CONTARECEBERREC crr
+            INNER JOIN CONTARECEBER cr ON crr.CODCR = cr.CODCR
+            INNER JOIN MOVENDA m ON cr.CODMOVENDA = m.CODMOVENDA
+            WHERE crr.VALOR > 0
             {dateFilter}
-            ORDER BY cr.DATA DESC";
+            ORDER BY crr.DATA DESC";
 
         try
         {
