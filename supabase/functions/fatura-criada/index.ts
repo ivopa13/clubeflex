@@ -119,16 +119,38 @@ Deno.serve(async (req) => {
     // Validar dados do cliente
     if (!customer.name || customer.name.trim() === '') {
       console.error('Validação falhou: Nome do cliente vazio');
+      
+      // Registrar erro de validação
+      await supabase.from('validation_errors').insert({
+        event_id: event_id,
+        event_type: 'invoice_created',
+        error_type: 'empty_name',
+        entity_type: 'customer',
+        received_data: customer,
+        error_details: 'Nome do cliente está vazio ou ausente',
+      });
+      
       return new Response(
-        JSON.stringify({ ok: false, error: 'Nome do cliente é obrigatório' }),
+        JSON.stringify({ ok: false, error: 'Nome do cliente é obrigatório', validation_error: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
     if (!customer.doc || !validarDocumento(customer.doc)) {
       console.error('Validação falhou: CPF/CNPJ do cliente inválido:', customer.doc);
+      
+      // Registrar erro de validação
+      await supabase.from('validation_errors').insert({
+        event_id: event_id,
+        event_type: 'invoice_created',
+        error_type: 'invalid_cpf_cnpj',
+        entity_type: 'customer',
+        received_data: customer,
+        error_details: `CPF/CNPJ inválido: ${customer.doc || 'não fornecido'}`,
+      });
+      
       return new Response(
-        JSON.stringify({ ok: false, error: 'CPF/CNPJ do cliente inválido ou ausente' }),
+        JSON.stringify({ ok: false, error: 'CPF/CNPJ do cliente inválido ou ausente', validation_error: true }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -137,16 +159,38 @@ Deno.serve(async (req) => {
     if (specifier) {
       if (!specifier.name || specifier.name.trim() === '') {
         console.error('Validação falhou: Nome do especificador vazio');
+        
+        // Registrar erro de validação
+        await supabase.from('validation_errors').insert({
+          event_id: event_id,
+          event_type: 'invoice_created',
+          error_type: 'empty_name',
+          entity_type: 'specifier',
+          received_data: specifier,
+          error_details: 'Nome do especificador está vazio ou ausente',
+        });
+        
         return new Response(
-          JSON.stringify({ ok: false, error: 'Nome do especificador é obrigatório' }),
+          JSON.stringify({ ok: false, error: 'Nome do especificador é obrigatório', validation_error: true }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         );
       }
 
       if (!specifier.doc || !validarDocumento(specifier.doc)) {
         console.error('Validação falhou: CPF/CNPJ do especificador inválido:', specifier.doc);
+        
+        // Registrar erro de validação
+        await supabase.from('validation_errors').insert({
+          event_id: event_id,
+          event_type: 'invoice_created',
+          error_type: 'invalid_cpf_cnpj',
+          entity_type: 'specifier',
+          received_data: specifier,
+          error_details: `CPF/CNPJ inválido: ${specifier.doc || 'não fornecido'}`,
+        });
+        
         return new Response(
-          JSON.stringify({ ok: false, error: 'CPF/CNPJ do especificador inválido ou ausente' }),
+          JSON.stringify({ ok: false, error: 'CPF/CNPJ do especificador inválido ou ausente', validation_error: true }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
         );
       }

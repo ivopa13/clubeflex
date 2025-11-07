@@ -178,14 +178,36 @@ public class SyncService
     {
         for (int attempt = 1; attempt <= _maxRetries; attempt++)
         {
-            var success = await sendAction();
-
-            if (success)
-                return true;
-
-            if (attempt < _maxRetries)
+            try
             {
-                Log.Warning($"Tentativa {attempt}/{_maxRetries} falhou para {eventId}. Aguardando {_retryDelaySeconds}s...");
+                var success = await sendAction();
+
+                if (success)
+                    return true;
+
+                // Se falhou, verificar se é erro de validação
+                // Erros de validação não devem ser retentados
+                var existingLog = await _cloudSyncLogService.GetLogByEventIdAsync(eventId);
+                if (existingLog != null && existingLog.ErrorMessage != null && 
+                    existingLog.ErrorMessage.Contains("validation_error"))
+                {
+                    Log.Warning($"❌ Erro de validação detectado para {eventId}. Não será retentado automaticamente.");
+                    return false;
+                }
+
+                if (attempt < _maxRetries)
+                {
+                    Log.Warning($"Tentativa {attempt}/{_maxRetries} falhou para {eventId}. Aguardando {_retryDelaySeconds}s...");
+                    await Task.Delay(_retryDelaySeconds * 1000);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, $"Erro na tentativa {attempt} para {eventId}");
+                
+                if (attempt >= _maxRetries)
+                    return false;
+                
                 await Task.Delay(_retryDelaySeconds * 1000);
             }
         }

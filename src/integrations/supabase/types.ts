@@ -500,6 +500,51 @@ export type Database = {
         }
         Relationships: []
       }
+      validation_errors: {
+        Row: {
+          created_at: string | null
+          entity_type: string
+          error_details: string
+          error_type: string
+          event_id: string
+          event_type: string
+          id: string
+          received_data: Json
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          entity_type: string
+          error_details: string
+          error_type: string
+          event_id: string
+          event_type: string
+          id?: string
+          received_data: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          entity_type?: string
+          error_details?: string
+          error_type?: string
+          event_id?: string
+          event_type?: string
+          id?: string
+          received_data?: Json
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       webhook_events: {
         Row: {
           event_id: string

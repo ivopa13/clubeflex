@@ -22,6 +22,7 @@ import AdminResgates from "./pages/admin/AdminResgates";
 import AdminFaturas from "./pages/admin/AdminFaturas";
 import AdminRelatorios from "./pages/admin/AdminRelatorios";
 import AdminSyncLogs from "./pages/admin/AdminSyncLogs";
+import AdminValidationErrors from "./pages/admin/AdminValidationErrors";
 
 const queryClient = new QueryClient();
 
@@ -164,6 +165,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminSyncLogs />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/erros-validacao"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminValidationErrors />
                 </AdminLayout>
               </AuthGuard>
             }
