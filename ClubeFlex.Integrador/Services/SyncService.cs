@@ -97,15 +97,15 @@ public class SyncService
                 {
                     EventId = invoice.EventId,
                     EventType = "fatura-criada",
-                    Status = result ? "success" : "error",
+                    Status = result.Success ? "success" : "error",
                     Payload = Newtonsoft.Json.JsonConvert.SerializeObject(invoice),
-                    ErrorMessage = result ? null : "Falha após tentativas de retry",
-                    Attempts = result ? 1 : _maxRetries
+                    ErrorMessage = result.ErrorMessage,
+                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
                 };
 
                 await _cloudSyncLogService.SaveSyncLogAsync(log);
 
-                if (result)
+                if (result.Success)
                     success++;
                 else
                     errors++;
@@ -149,15 +149,15 @@ public class SyncService
                 {
                     EventId = payment.EventId,
                     EventType = "pagamento-confirmado",
-                    Status = result ? "success" : "error",
+                    Status = result.Success ? "success" : "error",
                     Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
-                    ErrorMessage = result ? null : "Falha após tentativas de retry",
-                    Attempts = result ? 1 : _maxRetries
+                    ErrorMessage = result.ErrorMessage,
+                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
                 };
 
                 await _cloudSyncLogService.SaveSyncLogAsync(log);
 
-                if (result)
+                if (result.Success)
                     success++;
                 else
                     errors++;
@@ -174,27 +174,25 @@ public class SyncService
     /// <summary>
     /// Envia com retry automático em caso de falha
     /// </summary>
-    private async Task<bool> SendWithRetryAsync(Func<Task<bool>> sendAction, string eventId)
+    private async Task<ApiResponse> SendWithRetryAsync(Func<Task<ApiResponse>> sendAction, string eventId)
     {
         for (int attempt = 1; attempt <= _maxRetries; attempt++)
         {
             try
             {
-                var success = await sendAction();
+                var result = await sendAction();
 
-                if (success)
-                    return true;
+                if (result.Success)
+                    return result;
 
-                // Se falhou, verificar se é erro de validação
-                // Erros de validação não devem ser retentados
-                var existingLog = await _cloudSyncLogService.GetLogByEventIdAsync(eventId);
-                if (existingLog != null && existingLog.ErrorMessage != null && 
-                    existingLog.ErrorMessage.Contains("validation_error"))
+                // Se é erro de validação, não retenta
+                if (result.IsValidationError)
                 {
-                    Log.Warning($"❌ Erro de validação detectado para {eventId}. Não será retentado automaticamente.");
-                    return false;
+                    Log.Warning($"❌ Erro de validação detectado para {eventId}. Não será retentado.");
+                    return result;
                 }
 
+                // Se é erro técnico e ainda tem tentativas, aguarda e retenta
                 if (attempt < _maxRetries)
                 {
                     Log.Warning($"Tentativa {attempt}/{_maxRetries} falhou para {eventId}. Aguardando {_retryDelaySeconds}s...");
@@ -206,13 +204,23 @@ public class SyncService
                 Log.Error(ex, $"Erro na tentativa {attempt} para {eventId}");
                 
                 if (attempt >= _maxRetries)
-                    return false;
+                {
+                    return new ApiResponse 
+                    { 
+                        Success = false, 
+                        ErrorMessage = ex.Message 
+                    };
+                }
                 
                 await Task.Delay(_retryDelaySeconds * 1000);
             }
         }
 
         Log.Error($"Todas as {_maxRetries} tentativas falharam para {eventId}");
-        return false;
+        return new ApiResponse 
+        { 
+            Success = false, 
+            ErrorMessage = "Falha após todas as tentativas" 
+        };
     }
 }

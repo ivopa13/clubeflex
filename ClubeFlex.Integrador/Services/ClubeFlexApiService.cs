@@ -22,7 +22,7 @@ public class ClubeFlexApiService
     /// <summary>
     /// Envia fatura criada para o Clube Flex
     /// </summary>
-    public async Task<bool> SendInvoiceCreatedAsync(FaturaCriadaPayload payload)
+    public async Task<ApiResponse> SendInvoiceCreatedAsync(FaturaCriadaPayload payload)
     {
         try
         {
@@ -38,25 +38,53 @@ public class ClubeFlexApiService
             if (response.IsSuccessStatusCode)
             {
                 Log.Information($"✓ Fatura {payload.InvoiceIdExt} enviada com sucesso");
-                return true;
+                return new ApiResponse { Success = true };
             }
             else
             {
                 Log.Error($"✗ Erro ao enviar fatura {payload.InvoiceIdExt}: {response.StatusCode} - {responseBody}");
-                return false;
+                
+                // Verificar se é erro de validação
+                var isValidationError = false;
+                string? errorMessage = responseBody;
+                
+                try
+                {
+                    var errorResponse = JsonConvert.DeserializeObject<dynamic>(responseBody);
+                    if (errorResponse?.validation_error == true)
+                    {
+                        isValidationError = true;
+                        errorMessage = errorResponse?.error?.ToString() ?? responseBody;
+                    }
+                }
+                catch
+                {
+                    // Se não conseguir parsear, assume que não é erro de validação
+                }
+                
+                return new ApiResponse 
+                { 
+                    Success = false, 
+                    IsValidationError = isValidationError,
+                    ErrorMessage = errorMessage
+                };
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, $"Exceção ao enviar fatura {payload.InvoiceIdExt}");
-            return false;
+            return new ApiResponse 
+            { 
+                Success = false, 
+                ErrorMessage = ex.Message 
+            };
         }
     }
 
     /// <summary>
     /// Envia pagamento confirmado para o Clube Flex
     /// </summary>
-    public async Task<bool> SendPaymentConfirmedAsync(PagamentoPayload payload)
+    public async Task<ApiResponse> SendPaymentConfirmedAsync(PagamentoPayload payload)
     {
         try
         {
@@ -72,18 +100,46 @@ public class ClubeFlexApiService
             if (response.IsSuccessStatusCode)
             {
                 Log.Information($"✓ Pagamento da fatura {payload.InvoiceIdExt} enviado com sucesso");
-                return true;
+                return new ApiResponse { Success = true };
             }
             else
             {
                 Log.Error($"✗ Erro ao enviar pagamento da fatura {payload.InvoiceIdExt}: {response.StatusCode} - {responseBody}");
-                return false;
+                
+                // Verificar se é erro de validação
+                var isValidationError = false;
+                string? errorMessage = responseBody;
+                
+                try
+                {
+                    var errorResponse = JsonConvert.DeserializeObject<dynamic>(responseBody);
+                    if (errorResponse?.validation_error == true)
+                    {
+                        isValidationError = true;
+                        errorMessage = errorResponse?.error?.ToString() ?? responseBody;
+                    }
+                }
+                catch
+                {
+                    // Se não conseguir parsear, assume que não é erro de validação
+                }
+                
+                return new ApiResponse 
+                { 
+                    Success = false, 
+                    IsValidationError = isValidationError,
+                    ErrorMessage = errorMessage
+                };
             }
         }
         catch (Exception ex)
         {
             Log.Error(ex, $"Exceção ao enviar pagamento da fatura {payload.InvoiceIdExt}");
-            return false;
+            return new ApiResponse 
+            { 
+                Success = false, 
+                ErrorMessage = ex.Message 
+            };
         }
     }
 

@@ -66,31 +66,4 @@ public class CloudSyncLogService
             Log.Error(ex, "Erro ao enviar log para nuvem");
         }
     }
-
-    public async Task<SyncLog?> GetLogByEventIdAsync(string eventId)
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync($"{_baseUrl}/rest/v1/sync_logs?event_id=eq.{eventId}&select=*&limit=1");
-
-            if (!response.IsSuccessStatusCode)
-            {
-                Log.Warning($"Não foi possível buscar log para event_id: {eventId}");
-                return null;
-            }
-
-            var content = await response.Content.ReadAsStringAsync();
-            var logs = JsonSerializer.Deserialize<List<SyncLog>>(content, new JsonSerializerOptions 
-            { 
-                PropertyNameCaseInsensitive = true 
-            });
-
-            return logs?.FirstOrDefault();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, $"Erro ao buscar log por event_id: {eventId}");
-            return null;
-        }
-    }
 }
