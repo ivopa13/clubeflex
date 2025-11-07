@@ -211,6 +211,16 @@ Deno.serve(async (req) => {
 
     if (existingEvent) {
       console.log(`Event ${event_id} already processed, skipping`);
+      
+      // Se o order_number veio no payload mas está NULL no banco, atualizar
+      if (order_number) {
+        await supabase
+          .from('invoices')
+          .update({ order_number: order_number })
+          .eq('invoice_id_ext', invoice_id_ext)
+          .is('order_number', null);
+      }
+      
       return new Response(
         JSON.stringify({ ok: true, message: 'Event already processed' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
