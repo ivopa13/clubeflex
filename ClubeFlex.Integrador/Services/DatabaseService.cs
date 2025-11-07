@@ -48,6 +48,8 @@ public class DatabaseService
                 c.EMAIL as customer_email,
                 c.TELEFONE as customer_phone,
                 t.NOMETRANS as specifier_name,
+                t.CPFCNPJ as specifier_cpf,
+                t.CNPJ as specifier_cnpj,
                 t.CATEGORIA as specifier_category
             FROM MOVENDA m
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
@@ -69,15 +71,18 @@ public class DatabaseService
                 var invoiceId = reader["invoice_id"].ToString() ?? "";
                 var eventId = $"FAT_{invoiceId}";
 
-                // Determina qual documento usar (CPF ou CNPJ)
-                var customerDoc = !reader.IsDBNull(reader.GetOrdinal("customer_cpf")) && 
-                                  !string.IsNullOrWhiteSpace(reader["customer_cpf"].ToString())
-                    ? reader["customer_cpf"].ToString()!.Trim()
-                    : reader["customer_cnpj"].ToString()!.Trim();
-
                 var orderNumber = reader.IsDBNull(reader.GetOrdinal("order_number")) 
                     ? null 
                     : reader["order_number"].ToString();
+
+                // Obter CPF e CNPJ do cliente (envia ambos, mesmo que sejam "N")
+                var customerCpf = reader.IsDBNull(reader.GetOrdinal("customer_cpf")) 
+                    ? null 
+                    : reader["customer_cpf"].ToString()?.Trim();
+                
+                var customerCnpj = reader.IsDBNull(reader.GetOrdinal("customer_cnpj")) 
+                    ? null 
+                    : reader["customer_cnpj"].ToString()?.Trim();
 
                 var payload = new FaturaCriadaPayload
                 {
@@ -90,7 +95,8 @@ public class DatabaseService
                     {
                         IdExt = reader["customer_id"].ToString()!,
                         Name = reader["customer_name"].ToString()!,
-                        Doc = customerDoc,
+                        Cpf = customerCpf,
+                        Cnpj = customerCnpj,
                         Email = reader.IsDBNull(reader.GetOrdinal("customer_email")) 
                             ? null 
                             : reader["customer_email"].ToString(),
@@ -111,11 +117,21 @@ public class DatabaseService
                         ? "profissional" 
                         : reader["specifier_category"].ToString()!;
 
+                    // Obter CPF e CNPJ do especificador (envia ambos, mesmo que sejam "N")
+                    var specifierCpf = reader.IsDBNull(reader.GetOrdinal("specifier_cpf")) 
+                        ? null 
+                        : reader["specifier_cpf"].ToString()?.Trim();
+                    
+                    var specifierCnpj = reader.IsDBNull(reader.GetOrdinal("specifier_cnpj")) 
+                        ? null 
+                        : reader["specifier_cnpj"].ToString()?.Trim();
+
                     payload.Specifier = new SpecifierData
                     {
                         IdExt = reader["specifier_id"].ToString()!,
                         Name = specifierName,
-                        Doc = string.Empty,
+                        Cpf = specifierCpf,
+                        Cnpj = specifierCnpj,
                         Email = null,
                         Phone = null,
                         Role = specifierCategory

@@ -66,20 +66,75 @@ function validarCNPJ(cnpj: string): boolean {
   return true;
 }
 
+// Função auxiliar: normaliza "N" para null
+function normalizarDocumento(doc: string | null | undefined): string | null {
+  if (!doc || doc.trim() === '' || doc.toUpperCase().trim() === 'N') {
+    return null;
+  }
+  return doc;
+}
+
 // Validação de documento (CPF ou CNPJ)
 function validarDocumento(doc: string | null | undefined): boolean {
-  // Se não tem documento ou é "N", é inválido
-  if (!doc || doc.trim() === '' || doc === 'N') {
+  const docNormalizado = normalizarDocumento(doc);
+  
+  // Se não tem documento, é inválido
+  if (!docNormalizado) {
     return false;
   }
   
-  const cleanDoc = doc.replace(/[^\d]/g, '');
+  const cleanDoc = docNormalizado.replace(/[^\d]/g, '');
   if (cleanDoc.length === 11) {
-    return validarCPF(doc);
+    return validarCPF(docNormalizado);
   } else if (cleanDoc.length === 14) {
-    return validarCNPJ(doc);
+    return validarCNPJ(docNormalizado);
   }
   return false;
+}
+
+// Validação de entidade (Customer ou Specifier) - aceita "N" em um documento se o outro for válido
+function validarDocumentos(cpf: string | null | undefined, cnpj: string | null | undefined): { valid: boolean; doc: string | null; error?: string } {
+  const cpfNorm = normalizarDocumento(cpf);
+  const cnpjNorm = normalizarDocumento(cnpj);
+  
+  // Pelo menos um documento deve existir
+  if (!cpfNorm && !cnpjNorm) {
+    return { 
+      valid: false, 
+      doc: null,
+      error: 'CPF ou CNPJ é obrigatório. Recebido: ambos vazios ou "N"'
+    };
+  }
+  
+  // Se tem CPF, validar
+  if (cpfNorm) {
+    if (!validarCPF(cpfNorm)) {
+      return { 
+        valid: false, 
+        doc: cpfNorm,
+        error: `CPF inválido: ${cpfNorm}`
+      };
+    }
+    return { valid: true, doc: cpfNorm };
+  }
+  
+  // Se tem CNPJ, validar
+  if (cnpjNorm) {
+    if (!validarCNPJ(cnpjNorm)) {
+      return { 
+        valid: false, 
+        doc: cnpjNorm,
+        error: `CNPJ inválido: ${cnpjNorm}`
+      };
+    }
+    return { valid: true, doc: cnpjNorm };
+  }
+  
+  return { 
+    valid: false, 
+    doc: null,
+    error: 'Nenhum documento válido fornecido'
+  };
 }
 
 interface InvoicePayload {
@@ -92,14 +147,18 @@ interface InvoicePayload {
   customer: {
     id_ext: string;
     name: string;
-    doc: string;
+    doc?: string;  // Mantém compatibilidade
+    cpf?: string;  // Novos campos separados
+    cnpj?: string;
     email?: string;
     phone?: string;
   };
   specifier?: {
     id_ext: string;
     name: string;
-    doc: string;
+    doc?: string;  // Mantém compatibilidade
+    cpf?: string;  // Novos campos separados
+    cnpj?: string;
     email?: string;
     phone?: string;
     role: string;
@@ -142,8 +201,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!validarDocumento(customer.doc)) {
-      console.error('Validação falhou: CPF/CNPJ do cliente inválido:', customer.doc);
+    // Validar documento do cliente (suporta doc único ou cpf/cnpj separados)
+    const customerCpf = customer.cpf || (customer.doc && customer.doc.replace(/[^\d]/g, '').length === 11 ? customer.doc : null);
+    const customerCnpj = customer.cnpj || (customer.doc && customer.doc.replace(/[^\d]/g, '').length === 14 ? customer.doc : null);
+    const customerDocValidation = validarDocumentos(customerCpf, customerCnpj);
+    
+    if (!customerDocValidation.valid) {
+      console.error('Validação falhou: CPF/CNPJ do cliente inválido:', customerDocValidation.error);
       
       // Registrar erro de validação
       await supabase.from('validation_errors').insert({
@@ -152,7 +216,7 @@ Deno.serve(async (req) => {
         error_type: 'invalid_cpf_cnpj',
         entity_type: 'customer',
         received_data: customer,
-        error_details: `Cliente deve ter CPF ou CNPJ válido. Recebido: ${customer.doc || 'não fornecido'}. Obs: "N" não é um documento válido.`,
+        error_details: customerDocValidation.error,
       });
       
       return new Response(
@@ -162,6 +226,7 @@ Deno.serve(async (req) => {
     }
 
     // Validar dados do especificador (se presente)
+    let specifierDocValidation = null;
     if (specifier) {
       if (!specifier.name || specifier.name.trim() === '') {
         console.error('Validação falhou: Nome do especificador vazio');
@@ -182,8 +247,13 @@ Deno.serve(async (req) => {
         );
       }
 
-      if (!validarDocumento(specifier.doc)) {
-        console.error('Validação falhou: CPF/CNPJ do especificador inválido:', specifier.doc);
+      // Validar documento do especificador (suporta doc único ou cpf/cnpj separados)
+      const specifierCpf = specifier.cpf || (specifier.doc && specifier.doc.replace(/[^\d]/g, '').length === 11 ? specifier.doc : null);
+      const specifierCnpj = specifier.cnpj || (specifier.doc && specifier.doc.replace(/[^\d]/g, '').length === 14 ? specifier.doc : null);
+      specifierDocValidation = validarDocumentos(specifierCpf, specifierCnpj);
+      
+      if (!specifierDocValidation.valid) {
+        console.error('Validação falhou: CPF/CNPJ do especificador inválido:', specifierDocValidation.error);
         
         // Registrar erro de validação
         await supabase.from('validation_errors').insert({
@@ -192,7 +262,7 @@ Deno.serve(async (req) => {
           error_type: 'invalid_cpf_cnpj',
           entity_type: 'specifier',
           received_data: specifier,
-          error_details: `Especificador deve ter CPF ou CNPJ válido. Recebido: ${specifier.doc || 'não fornecido'}. Obs: "N" não é um documento válido.`,
+          error_details: specifierDocValidation.error,
         });
         
         return new Response(
@@ -233,7 +303,7 @@ Deno.serve(async (req) => {
       .upsert({
         customer_id_ext: customer.id_ext,
         name: customer.name,
-        doc: customer.doc,
+        doc: customerDocValidation.doc!, // Usar o documento validado
         email: customer.email ?? null,
         phone: customer.phone ?? null,
         status: 'active',
@@ -250,13 +320,13 @@ Deno.serve(async (req) => {
     }
 
     let specifierId = null;
-    if (specifier) {
+    if (specifier && specifierDocValidation) {
       const { data: specifierData, error: specifierError } = await supabase
         .from('specifiers')
         .upsert({
           specifier_id_ext: specifier.id_ext,
           name: specifier.name,
-          doc: specifier.doc,
+          doc: specifierDocValidation.doc!, // Usar o documento validado
           email: specifier.email ?? null,
           phone: specifier.phone ?? null,
           role: specifier.role,

@@ -38,7 +38,13 @@ public class CustomerData
     public string Name { get; set; } = string.Empty;
 
     [JsonProperty("doc")]
-    public string Doc { get; set; } = string.Empty;
+    public string? Doc { get; set; }  // Mantido para compatibilidade
+
+    [JsonProperty("cpf")]
+    public string? Cpf { get; set; }
+
+    [JsonProperty("cnpj")]
+    public string? Cnpj { get; set; }
 
     [JsonProperty("email")]
     public string? Email { get; set; }
@@ -56,7 +62,13 @@ public class SpecifierData
     public string Name { get; set; } = string.Empty;
 
     [JsonProperty("doc")]
-    public string Doc { get; set; } = string.Empty;
+    public string? Doc { get; set; }  // Mantido para compatibilidade
+
+    [JsonProperty("cpf")]
+    public string? Cpf { get; set; }
+
+    [JsonProperty("cnpj")]
+    public string? Cnpj { get; set; }
 
     [JsonProperty("email")]
     public string? Email { get; set; }
