@@ -54,7 +54,7 @@ public class DatabaseService
             LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
             WHERE m.CODCLI <> 3005
             {dateFilter}
-            ORDER BY m.DATA DESC";
+            ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
 
         try
         {
@@ -164,7 +164,7 @@ public class DatabaseService
             INNER JOIN MOVENDA m ON cr.CODMOVENDA = m.CODMOVENDA
             WHERE crr.VALOR > 0
             {dateFilter}
-            ORDER BY crr.DATA DESC";
+            ORDER BY crr.DATA DESC, crr.ID DESC";
 
         try
         {
