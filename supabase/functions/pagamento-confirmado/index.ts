@@ -55,9 +55,21 @@ Deno.serve(async (req) => {
 
     if (invoiceError || !invoice) {
       console.error('Invoice not found:', invoice_id_ext);
+      
+      // Registrar erro de validação para não ficar retentando
+      await supabase.from('validation_errors').insert({
+        event_id: event_id,
+        event_type: 'payment_confirmed',
+        error_type: 'invoice_not_found',
+        entity_type: 'payment',
+        received_data: payload,
+        error_details: `Fatura ${invoice_id_ext} não foi encontrada. Certifique-se de que a fatura foi sincronizada antes de enviar o pagamento. Em modo teste, apenas as faturas mais recentes são sincronizadas.`,
+      });
+      
+      // Retornar 200 para que o integrador não fique retentando
       return new Response(
-        JSON.stringify({ ok: false, error: 'Invoice not found' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+        JSON.stringify({ ok: true, message: 'Payment ignored - invoice not found', warning: 'Invoice must be synced before payment' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
