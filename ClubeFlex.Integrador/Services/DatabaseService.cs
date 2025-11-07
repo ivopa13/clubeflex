@@ -1,3 +1,14 @@
+// ⚠️ ATENÇÃO - SEGURANÇA DO BANCO CPLUS ⚠️
+// 
+// ESTE SERVIÇO É SOMENTE-LEITURA (READ-ONLY)
+// NÃO MODIFICA O BANCO DE DADOS DO CPLUS EM NENHUMA CIRCUNSTÂNCIA
+// 
+// Operações permitidas: SELECT (leitura de faturas e pagamentos)
+// Operações PROIBIDAS: INSERT, UPDATE, DELETE, ALTER, DROP, CREATE
+//
+// Logs de sincronização são enviados para Lovable Cloud via API
+// NUNCA são salvos no banco local do CPlus
+
 using ClubeFlex.Integrador.Models;
 using FirebirdSql.Data.FirebirdClient;
 using Serilog;
@@ -166,40 +177,7 @@ public class DatabaseService
     }
 
     /// <summary>
-    /// Salva ou atualiza um registro de log de sincronização
-    /// </summary>
-    public async Task SaveSyncLogAsync(SyncLog log)
-    {
-        var query = @"
-            UPDATE OR INSERT INTO sync_log (event_id, event_type, status, payload, error_message, attempts, created_at, updated_at)
-            VALUES (@event_id, @event_type, @status, @payload, @error_message, @attempts, @created_at, @updated_at)
-            MATCHING (event_id, event_type)";
-
-        try
-        {
-            using var connection = new FbConnection(_connectionString);
-            await connection.OpenAsync();
-
-            using var command = new FbCommand(query, connection);
-            command.Parameters.AddWithValue("@event_id", log.EventId);
-            command.Parameters.AddWithValue("@event_type", log.EventType);
-            command.Parameters.AddWithValue("@status", log.Status);
-            command.Parameters.AddWithValue("@payload", log.Payload ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@error_message", log.ErrorMessage ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("@attempts", log.Attempts);
-            command.Parameters.AddWithValue("@created_at", log.CreatedAt);
-            command.Parameters.AddWithValue("@updated_at", DateTime.Now);
-
-            await command.ExecuteNonQueryAsync();
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, $"Erro ao salvar log de sincronização para evento {log.EventId}");
-        }
-    }
-
-    /// <summary>
-    /// Testa a conexão com o banco de dados
+    /// Testa a conexão com o banco de dados (somente leitura)
     /// </summary>
     public async Task<bool> TestConnectionAsync()
     {
