@@ -51,7 +51,7 @@ public class DatabaseService
             FROM MOVENDA m
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
             LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
-            WHERE 1=1
+            WHERE m.CODCLI <> 3005
             {dateFilter}
             ORDER BY m.DATA DESC";
 
