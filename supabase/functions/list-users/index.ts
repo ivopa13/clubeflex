@@ -59,12 +59,26 @@ Deno.serve(async (req) => {
     // Buscar roles
     const { data: allRoles } = await supabaseAdmin.from('user_roles').select('user_id, role')
 
+    // Buscar perfis para refletir edições feitas em /admin/usuarios
+    const userIds = (listed?.users || []).map((u) => u.id)
+    let profilesById: Record<string, { full_name: string | null; email: string | null }> = {}
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds)
+      profilesById = Object.fromEntries(
+        (profiles ?? []).map((p: any) => [p.id, { full_name: p.full_name, email: p.email }])
+      )
+    }
+
     const users = (listed?.users || []).map((u) => {
       const role = allRoles?.find((r) => r.user_id === u.id)?.role ?? null
+      const profile = profilesById[u.id]
       return {
         id: u.id,
-        email: u.email,
-        full_name: u.user_metadata?.full_name ?? null,
+        email: profile?.email ?? u.email,
+        full_name: profile?.full_name ?? u.user_metadata?.full_name ?? null,
         role,
         created_at: u.created_at,
       }
