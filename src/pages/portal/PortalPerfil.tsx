@@ -35,12 +35,12 @@ export default function PortalPerfil() {
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data: profileData, isLoading } = useQuery<ProfileData>({
+  const { data: profileData, isLoading, error: queryError } = useQuery<ProfileData>({
     queryKey: ["profile"],
     queryFn: async () => {
       const { actorType, actorId } = await getUserActorInfo();
       if (!actorType || !actorId) {
-        throw new Error("Usuário não identificado");
+        throw new Error("Seu cadastro ainda não foi vinculado ao sistema. Entre em contato com o administrador.");
       }
 
       if (actorType === "customer") {
@@ -51,7 +51,7 @@ export default function PortalPerfil() {
           .maybeSingle();
 
         if (error) throw error;
-        if (!data) throw new Error("Cadastro não encontrado");
+        if (!data) throw new Error("Cadastro não encontrado no sistema. Entre em contato com o administrador.");
         
         return {
           ...data,
@@ -66,7 +66,7 @@ export default function PortalPerfil() {
           .maybeSingle();
 
         if (error) throw error;
-        if (!data) throw new Error("Cadastro não encontrado");
+        if (!data) throw new Error("Cadastro não encontrado no sistema. Entre em contato com o administrador.");
         
         return {
           ...data,
@@ -147,6 +147,22 @@ export default function PortalPerfil() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] space-y-4">
+        <div className="text-center max-w-md">
+          <p className="text-lg font-semibold text-foreground mb-2">Cadastro Pendente</p>
+          <p className="text-muted-foreground">
+            {queryError instanceof Error ? queryError.message : "Não foi possível carregar seus dados."}
+          </p>
+          <p className="text-sm text-muted-foreground mt-4">
+            Por favor, entre em contato com o administrador para vincular seu cadastro.
+          </p>
+        </div>
       </div>
     );
   }
