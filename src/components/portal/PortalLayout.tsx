@@ -19,22 +19,44 @@ export const PortalLayout = ({ children }: PortalLayoutProps) => {
     const fetchUserName = async () => {
       try {
         const { actorType, actorId } = await getUserActorInfo();
-        if (!actorType || !actorId) return;
-
-        if (actorType === "customer") {
-          const { data } = await supabase
-            .from("customers")
-            .select("name")
-            .eq("id", actorId)
+        
+        // Tentar buscar nome do customer/specifier
+        if (actorType && actorId) {
+          if (actorType === "customer") {
+            const { data } = await supabase
+              .from("customers")
+              .select("name")
+              .eq("id", actorId)
+              .maybeSingle();
+            if (data) {
+              setUserName(data.name);
+              return;
+            }
+          } else if (actorType === "specifier") {
+            const { data } = await supabase
+              .from("specifiers")
+              .select("name")
+              .eq("id", actorId)
+              .maybeSingle();
+            if (data) {
+              setUserName(data.name);
+              return;
+            }
+          }
+        }
+        
+        // Fallback: buscar do profile se não encontrou no customer/specifier
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
             .maybeSingle();
-          if (data) setUserName(data.name);
-        } else if (actorType === "specifier") {
-          const { data } = await supabase
-            .from("specifiers")
-            .select("name")
-            .eq("id", actorId)
-            .maybeSingle();
-          if (data) setUserName(data.name);
+          
+          if (profile?.full_name) {
+            setUserName(profile.full_name);
+          }
         }
       } catch (error) {
         console.error("Error fetching user name:", error);
