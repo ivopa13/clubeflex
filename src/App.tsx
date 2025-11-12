@@ -27,6 +27,7 @@ import AdminValidationErrors from "./pages/admin/AdminValidationErrors";
 import AdminPagamentos from "./pages/admin/AdminPagamentos";
 import AdminClientesPendentes from "./pages/admin/AdminClientesPendentes";
 import AdminEspecificadoresPendentes from "./pages/admin/AdminEspecificadoresPendentes";
+import AdminPerfil from "./pages/admin/AdminPerfil";
 
 const queryClient = new QueryClient();
 
@@ -219,6 +220,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminEspecificadoresPendentes />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/perfil"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminPerfil />
                 </AdminLayout>
               </AuthGuard>
             }
