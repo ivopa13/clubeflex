@@ -14,6 +14,7 @@ import PortalFaturas from "./pages/portal/PortalFaturas";
 import PortalVitrine from "./pages/portal/PortalVitrine";
 import PortalCheckout from "./pages/portal/PortalCheckout";
 import PortalResgates from "./pages/portal/PortalResgates";
+import PortalPerfil from "./pages/portal/PortalPerfil";
 import { AdminLayout } from "./components/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminUsuarios from "./pages/admin/AdminUsuarios";
@@ -96,6 +97,16 @@ const App = () => (
               <AuthGuard allowedRoles={["customer", "specifier"]}>
                 <PortalLayout>
                   <PortalResgates />
+                </PortalLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/portal/perfil"
+            element={
+              <AuthGuard allowedRoles={["customer", "specifier"]}>
+                <PortalLayout>
+                  <PortalPerfil />
                 </PortalLayout>
               </AuthGuard>
             }

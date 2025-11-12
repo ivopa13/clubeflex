@@ -1,4 +1,4 @@
-import { Home, Receipt, ShoppingBag, Package, FileText, LogOut } from "lucide-react";
+import { Home, Receipt, ShoppingBag, Package, FileText, LogOut, User } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -22,6 +22,7 @@ const items = [
   { title: "Faturas", url: "/portal/faturas", icon: Receipt },
   { title: "Vitrine", url: "/portal/vitrine", icon: ShoppingBag },
   { title: "Meus Resgates", url: "/portal/resgates", icon: Package },
+  { title: "Meu Perfil", url: "/portal/perfil", icon: User },
 ];
 
 export function PortalSidebar() {
