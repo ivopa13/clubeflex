@@ -260,6 +260,36 @@ Em caso de dúvidas ou problemas:
 
 ## ⚙️ Configurações Avançadas
 
+### Configurar Data Inicial de Sincronização
+
+Em `appsettings.json`, ajuste o `SyncFromDate`:
+
+```json
+"SyncSettings": {
+  "SyncFromDate": "TODAY"  // Sincroniza apenas dados de hoje em diante
+  // ou
+  "SyncFromDate": "2025-01-15"  // Data específica no formato YYYY-MM-DD
+  // ou
+  "SyncFromDate": null  // Sincroniza tudo (sem filtro de data)
+}
+```
+
+**⏰ Intervalo Recomendado de Sincronização:**
+
+Para um sistema de pontos em produção, recomendamos:
+
+- **5 a 15 minutos**: Ideal para a maioria dos casos
+  - Garante que pontos apareçam rapidamente após faturamento
+  - Balanceia performance do servidor com atualização quase em tempo real
+  - Evita sobrecarga no banco de dados
+
+- **30 minutos**: Se o volume de transações for muito alto (>1000 faturas/dia)
+
+- **1 hora**: Apenas se a imediatismo não for crítico
+
+**Para configurar:**
+Execute `install-scheduler.bat` e digite o intervalo em minutos quando solicitado.
+
 ### Alterar Intervalo de Sincronização
 
 Edite a tarefa agendada ou reinstale com `install-scheduler.bat`

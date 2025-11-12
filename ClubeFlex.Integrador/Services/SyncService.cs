@@ -30,15 +30,31 @@ public class SyncService
         _testModeLimit = int.TryParse(configuration["SyncSettings:TestModeLimit"], out var limit) ? limit : 10;
         
         var syncFromDateStr = configuration["SyncSettings:SyncFromDate"];
-        _syncFromDate = !string.IsNullOrEmpty(syncFromDateStr) && DateTime.TryParse(syncFromDateStr, out var date) 
-            ? date 
-            : null;
+        if (!string.IsNullOrEmpty(syncFromDateStr))
+        {
+            if (syncFromDateStr.Equals("TODAY", StringComparison.OrdinalIgnoreCase))
+            {
+                _syncFromDate = DateTime.Today;
+                Log.Information($"🔄 Configurado para sincronizar apenas dados de hoje em diante: {_syncFromDate.Value:dd/MM/yyyy}");
+            }
+            else if (DateTime.TryParse(syncFromDateStr, out var date))
+            {
+                _syncFromDate = date;
+                Log.Information($"📅 Sincronizando apenas registros a partir de {_syncFromDate.Value:dd/MM/yyyy}");
+            }
+            else
+            {
+                _syncFromDate = null;
+                Log.Warning($"⚠️ Valor inválido para SyncFromDate: '{syncFromDateStr}' - Sincronizando todos os registros");
+            }
+        }
+        else
+        {
+            _syncFromDate = null;
+        }
 
         if (_testMode)
             Log.Warning($"⚠️ MODO TESTE ATIVADO - Sincronizando apenas {_testModeLimit} registros mais recentes");
-        
-        if (_syncFromDate.HasValue)
-            Log.Information($"📅 Sincronizando apenas registros a partir de {_syncFromDate.Value:dd/MM/yyyy}");
     }
 
     /// <summary>
