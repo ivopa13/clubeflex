@@ -24,6 +24,8 @@ import AdminRelatorios from "./pages/admin/AdminRelatorios";
 import AdminSyncLogs from "./pages/admin/AdminSyncLogs";
 import AdminValidationErrors from "./pages/admin/AdminValidationErrors";
 import AdminPagamentos from "./pages/admin/AdminPagamentos";
+import AdminClientesPendentes from "./pages/admin/AdminClientesPendentes";
+import AdminEspecificadoresPendentes from "./pages/admin/AdminEspecificadoresPendentes";
 
 const queryClient = new QueryClient();
 
@@ -186,6 +188,26 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminValidationErrors />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/clientes-pendentes"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminClientesPendentes />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/especificadores-pendentes"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminEspecificadoresPendentes />
                 </AdminLayout>
               </AuthGuard>
             }

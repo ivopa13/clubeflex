@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign } from "lucide-react";
+import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign, UserX } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -17,6 +17,8 @@ import { toast } from "sonner";
 const menuItems = [
   { title: "Dashboard", icon: Home, path: "/admin" },
   { title: "Usuários", icon: Users, path: "/admin/usuarios" },
+  { title: "Clientes Pendentes", icon: UserX, path: "/admin/clientes-pendentes" },
+  { title: "Especificadores Pendentes", icon: UserX, path: "/admin/especificadores-pendentes" },
   { title: "Catálogo", icon: Package, path: "/admin/produtos" },
   { title: "Resgates", icon: ShoppingBag, path: "/admin/resgates" },
   { title: "Faturas", icon: FileText, path: "/admin/faturas" },
