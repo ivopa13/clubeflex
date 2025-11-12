@@ -79,8 +79,8 @@ export const PortalLayout = ({ children }: PortalLayoutProps) => {
                 <p className="text-xs text-muted-foreground">Portal de Pontos</p>
               </div>
               {userName && (
-                <div className="px-4 py-1.5 rounded-lg bg-secondary border border-border">
-                  <p className="text-sm font-semibold text-foreground">{userName}</p>
+                <div className="px-4 py-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                  <p className="text-sm font-semibold text-primary">{userName}</p>
                 </div>
               )}
             </div>
