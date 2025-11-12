@@ -49,13 +49,18 @@ export const PortalLayout = ({ children }: PortalLayoutProps) => {
       <div className="min-h-screen flex w-full">
         <PortalSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-16 border-b flex items-center px-4 bg-card gap-3">
+          <header className="h-16 border-b flex items-center px-4 bg-card gap-4">
             <SidebarTrigger />
-            <div className="flex-1">
-              <h1 className="text-xl font-bold text-primary">FLEX Clube</h1>
-              <p className="text-xs text-muted-foreground">
-                {userName ? `Bem-vindo, ${userName}` : "Bem-vindo"}
-              </p>
+            <div className="flex-1 flex items-center gap-4">
+              <div>
+                <h1 className="text-xl font-bold text-primary">FLEX Clube</h1>
+                <p className="text-xs text-muted-foreground">Portal de Pontos</p>
+              </div>
+              {userName && (
+                <div className="px-4 py-1.5 rounded-lg bg-secondary border border-border">
+                  <p className="text-sm font-semibold text-foreground">{userName}</p>
+                </div>
+              )}
             </div>
             {balance && (
               <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
