@@ -68,6 +68,7 @@ export type Database = {
           customer_id_ext: string
           doc: string
           email: string | null
+          external_ids: Json | null
           id: string
           name: string
           phone: string | null
@@ -79,6 +80,7 @@ export type Database = {
           customer_id_ext: string
           doc: string
           email?: string | null
+          external_ids?: Json | null
           id?: string
           name: string
           phone?: string | null
@@ -90,6 +92,7 @@ export type Database = {
           customer_id_ext?: string
           doc?: string
           email?: string | null
+          external_ids?: Json | null
           id?: string
           name?: string
           phone?: string | null
@@ -412,6 +415,7 @@ export type Database = {
           created_at: string | null
           doc: string
           email: string | null
+          external_ids: Json | null
           id: string
           name: string
           phone: string | null
@@ -424,6 +428,7 @@ export type Database = {
           created_at?: string | null
           doc: string
           email?: string | null
+          external_ids?: Json | null
           id?: string
           name: string
           phone?: string | null
@@ -436,6 +441,7 @@ export type Database = {
           created_at?: string | null
           doc?: string
           email?: string | null
+          external_ids?: Json | null
           id?: string
           name?: string
           phone?: string | null

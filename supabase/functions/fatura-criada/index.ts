@@ -306,52 +306,182 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Upsert customer
-    const { data: customerData, error: customerError } = await supabase
+    // Upsert customer baseado no doc (CNPJ/CPF)
+    // Primeiro, verificar se já existe um customer com esse doc
+    const { data: existingCustomer } = await supabase
       .from('customers')
-      .upsert({
-        customer_id_ext: customer.id_ext,
-        name: customer.name,
-        doc: customerDocValidation.doc!, // Usar o documento validado
-        email: customer.email ?? null,
-        phone: customer.phone ?? null,
-        status: 'active',
-      }, {
-        onConflict: 'customer_id_ext',
-        ignoreDuplicates: false,
-      })
-      .select()
-      .single();
+      .select('*')
+      .eq('doc', customerDocValidation.doc!)
+      .maybeSingle();
 
-    if (customerError) {
-      console.error('Error upserting customer:', customerError);
-      throw customerError;
+    let customerData;
+    
+    if (existingCustomer) {
+      console.log(`Customer com doc ${customerDocValidation.doc} já existe, atualizando...`);
+      
+      // Verificar se o customer_id_ext já está no array external_ids
+      const externalIds = existingCustomer.external_ids || [];
+      const idExists = externalIds.some((item: any) => item.id_ext === customer.id_ext);
+      
+      // Preparar o novo array de external_ids
+      let updatedExternalIds = [...externalIds];
+      if (!idExists) {
+        updatedExternalIds.push({ id_ext: customer.id_ext, name: customer.name });
+        console.log(`Adicionando novo CODCLI ${customer.id_ext} ao customer ${existingCustomer.id}`);
+      } else {
+        // Atualizar o nome se o id_ext já existe
+        updatedExternalIds = updatedExternalIds.map((item: any) => 
+          item.id_ext === customer.id_ext 
+            ? { id_ext: customer.id_ext, name: customer.name }
+            : item
+        );
+        console.log(`Atualizando nome do CODCLI ${customer.id_ext} existente`);
+      }
+      
+      // Atualizar o customer
+      const { data: updated, error: updateError } = await supabase
+        .from('customers')
+        .update({
+          customer_id_ext: customer.id_ext, // Atualizar para o mais recente
+          name: customer.name, // Atualizar para o mais recente
+          email: customer.email ?? existingCustomer.email,
+          phone: customer.phone ?? existingCustomer.phone,
+          external_ids: updatedExternalIds,
+        })
+        .eq('id', existingCustomer.id)
+        .select()
+        .single();
+      
+      if (updateError) {
+        console.error('Error updating customer:', updateError);
+        throw updateError;
+      }
+      customerData = updated;
+    } else {
+      console.log(`Criando novo customer com doc ${customerDocValidation.doc}`);
+      
+      // Criar novo customer
+      const { data: created, error: createError } = await supabase
+        .from('customers')
+        .insert({
+          customer_id_ext: customer.id_ext,
+          name: customer.name,
+          doc: customerDocValidation.doc!,
+          email: customer.email ?? null,
+          phone: customer.phone ?? null,
+          status: 'active',
+          external_ids: [{ id_ext: customer.id_ext, name: customer.name }],
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('Error creating customer:', createError);
+        throw createError;
+      }
+      customerData = created;
     }
 
     let specifierId = null;
     if (specifier && specifierDocValidation) {
-      const { data: specifierData, error: specifierError } = await supabase
-        .from('specifiers')
-        .upsert({
-          specifier_id_ext: specifier.id_ext,
-          name: specifier.name,
-          doc: specifierDocValidation.doc || 'N/A', // Usar documento validado ou N/A se não tem
-          email: specifier.email ?? null,
-          phone: specifier.phone ?? null,
-          role: specifier.role,
-          status: 'active',
-        }, {
-          onConflict: 'specifier_id_ext',
-          ignoreDuplicates: false,
-        })
-        .select()
-        .single();
+      // Se tem documento válido, fazer upsert baseado no doc
+      if (specifierDocValidation.doc) {
+        const { data: existingSpecifier } = await supabase
+          .from('specifiers')
+          .select('*')
+          .eq('doc', specifierDocValidation.doc)
+          .maybeSingle();
 
-      if (specifierError) {
-        console.error('Error upserting specifier:', specifierError);
-        throw specifierError;
+        if (existingSpecifier) {
+          console.log(`Specifier com doc ${specifierDocValidation.doc} já existe, atualizando...`);
+          
+          const externalIds = existingSpecifier.external_ids || [];
+          const idExists = externalIds.some((item: any) => item.id_ext === specifier.id_ext);
+          
+          let updatedExternalIds = [...externalIds];
+          if (!idExists) {
+            updatedExternalIds.push({ id_ext: specifier.id_ext, name: specifier.name });
+            console.log(`Adicionando novo código ${specifier.id_ext} ao specifier ${existingSpecifier.id}`);
+          } else {
+            updatedExternalIds = updatedExternalIds.map((item: any) => 
+              item.id_ext === specifier.id_ext 
+                ? { id_ext: specifier.id_ext, name: specifier.name }
+                : item
+            );
+            console.log(`Atualizando nome do código ${specifier.id_ext} existente`);
+          }
+          
+          const { data: updated, error: updateError } = await supabase
+            .from('specifiers')
+            .update({
+              specifier_id_ext: specifier.id_ext,
+              name: specifier.name,
+              email: specifier.email ?? existingSpecifier.email,
+              phone: specifier.phone ?? existingSpecifier.phone,
+              role: specifier.role,
+              external_ids: updatedExternalIds,
+            })
+            .eq('id', existingSpecifier.id)
+            .select()
+            .single();
+          
+          if (updateError) {
+            console.error('Error updating specifier:', updateError);
+            throw updateError;
+          }
+          specifierId = updated.id;
+        } else {
+          console.log(`Criando novo specifier com doc ${specifierDocValidation.doc}`);
+          
+          const { data: created, error: createError } = await supabase
+            .from('specifiers')
+            .insert({
+              specifier_id_ext: specifier.id_ext,
+              name: specifier.name,
+              doc: specifierDocValidation.doc,
+              email: specifier.email ?? null,
+              phone: specifier.phone ?? null,
+              role: specifier.role,
+              status: 'active',
+              external_ids: [{ id_ext: specifier.id_ext, name: specifier.name }],
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating specifier:', createError);
+            throw createError;
+          }
+          specifierId = created.id;
+        }
+      } else {
+        // Sem documento, fazer upsert pelo specifier_id_ext (comportamento antigo)
+        console.log('Specifier sem documento, usando specifier_id_ext como chave');
+        
+        const { data: specifierData, error: specifierError } = await supabase
+          .from('specifiers')
+          .upsert({
+            specifier_id_ext: specifier.id_ext,
+            name: specifier.name,
+            doc: 'N/A',
+            email: specifier.email ?? null,
+            phone: specifier.phone ?? null,
+            role: specifier.role,
+            status: 'active',
+            external_ids: [{ id_ext: specifier.id_ext, name: specifier.name }],
+          }, {
+            onConflict: 'specifier_id_ext',
+            ignoreDuplicates: false,
+          })
+          .select()
+          .single();
+
+        if (specifierError) {
+          console.error('Error upserting specifier:', specifierError);
+          throw specifierError;
+        }
+        specifierId = specifierData.id;
       }
-      specifierId = specifierData.id;
     }
 
     // Get program settings
