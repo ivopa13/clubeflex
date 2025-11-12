@@ -37,15 +37,16 @@ const removeMask = (value: string) => value.replace(/\D/g, "");
 
 const AdminUsuarios = () => {
   const queryClient = useQueryClient();
-  const [selectedRoles, setSelectedRoles] = useState<{ [key: string]: string }>({});
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
     userId: string | null;
-    data: { full_name: string; email: string; doc: string };
+    currentRole: string | null;
+    data: { full_name: string; email: string; doc: string; role: string };
   }>({
     open: false,
     userId: null,
-    data: { full_name: "", email: "", doc: "" },
+    currentRole: null,
+    data: { full_name: "", email: "", doc: "", role: "" },
   });
 
   const { data: users, isLoading } = useQuery({
@@ -83,8 +84,7 @@ const AdminUsuarios = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
-      toast.success('Role atribuído com sucesso!');
-      setSelectedRoles({});
+      toast.success('Tipo atribuído com sucesso!');
     },
     onError: (error: any) => {
       toast.error(error.message || 'Erro ao atribuir role');
@@ -117,7 +117,7 @@ const AdminUsuarios = () => {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: { full_name: string; email: string; doc: string } }) => {
+    mutationFn: async ({ userId, data, roleChanged }: { userId: string; data: { full_name: string; email: string; doc: string; role: string }; roleChanged: boolean }) => {
       const { error } = await supabase
         .from("profiles")
         .upsert({
@@ -130,34 +130,43 @@ const AdminUsuarios = () => {
         });
 
       if (error) throw error;
+
+      // Se a role foi alterada, atribuir nova role
+      if (roleChanged && data.role) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Não autenticado');
+
+        const { data: roleData, error: roleError } = await supabase.functions.invoke('assign-role', {
+          body: { userId, role: data.role as 'admin' | 'customer' | 'specifier' },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        if (roleError) throw roleError;
+        if (roleData?.error) throw new Error(roleData.error);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast.success("Usuário atualizado com sucesso!");
-      setEditDialog({ open: false, userId: null, data: { full_name: "", email: "", doc: "" } });
+      setEditDialog({ open: false, userId: null, currentRole: null, data: { full_name: "", email: "", doc: "", role: "" } });
     },
     onError: (error: Error) => {
       toast.error(`Erro ao atualizar: ${error.message}`);
     },
   });
 
-  const handleAssignRole = (userId: string) => {
-    const role = selectedRoles[userId];
-    if (!role) {
-      toast.error("Selecione um role");
-      return;
-    }
-    assignRoleMutation.mutate({ userId, role });
-  };
-
   const handleEdit = (user: any) => {
     setEditDialog({
       open: true,
       userId: user.id,
+      currentRole: user.role || null,
       data: {
         full_name: user.full_name || "",
         email: user.email || "",
         doc: user.doc ? formatCpfCnpj(user.doc) : "",
+        role: user.role || "",
       },
     });
   };
@@ -175,12 +184,16 @@ const AdminUsuarios = () => {
       return;
     }
 
+    const roleChanged = editDialog.currentRole !== editDialog.data.role && editDialog.data.role !== "";
+
     updateUserMutation.mutate({
       userId: editDialog.userId,
+      roleChanged,
       data: {
         full_name: editDialog.data.full_name,
         email: editDialog.data.email,
         doc: removeMask(editDialog.data.doc),
+        role: editDialog.data.role,
       },
     });
   };
@@ -198,7 +211,7 @@ const AdminUsuarios = () => {
       <Card>
         <CardHeader>
           <CardTitle>Usuários do Sistema</CardTitle>
-          <CardDescription>Atribuir roles aos usuários cadastrados</CardDescription>
+          <CardDescription>Gerenciar usuários e suas permissões</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -210,8 +223,7 @@ const AdminUsuarios = () => {
                   <TableHead>Email</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>CPF/CNPJ</TableHead>
-                  <TableHead>Role Atual</TableHead>
-                  <TableHead>Atribuir Role</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead>Cadastro</TableHead>
                   <TableHead>Ações</TableHead>
                 </TableRow>
@@ -229,34 +241,8 @@ const AdminUsuarios = () => {
                         {currentRole ? (
                           <Badge variant={currentRole.variant}>{currentRole.label}</Badge>
                         ) : (
-                          <Badge variant="outline">Sem role</Badge>
+                          <Badge variant="outline">Sem tipo</Badge>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Select
-                            value={selectedRoles[user.id] || ""}
-                            onValueChange={(value) => 
-                              setSelectedRoles({ ...selectedRoles, [user.id]: value })
-                            }
-                          >
-                            <SelectTrigger className="w-[180px]">
-                              <SelectValue placeholder="Selecionar role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="admin">Administrador</SelectItem>
-                              <SelectItem value="customer">Cliente</SelectItem>
-                              <SelectItem value="specifier">Especificador</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            size="sm"
-                            onClick={() => handleAssignRole(user.id)}
-                            disabled={!selectedRoles[user.id] || assignRoleMutation.isPending}
-                          >
-                            {assignRoleMutation.isPending ? 'Salvando...' : 'Salvar'}
-                          </Button>
-                        </div>
                       </TableCell>
                       <TableCell>
                         {format(new Date(user.created_at), "dd/MM/yy", { locale: ptBR })}
@@ -349,12 +335,35 @@ const AdminUsuarios = () => {
                 maxLength={18}
               />
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Tipo</Label>
+              <Select
+                value={editDialog.data.role}
+                onValueChange={(value) => 
+                  setEditDialog({
+                    ...editDialog,
+                    data: { ...editDialog.data, role: value }
+                  })
+                }
+                disabled={updateUserMutation.isPending}
+              >
+                <SelectTrigger id="role">
+                  <SelectValue placeholder="Selecionar tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrador</SelectItem>
+                  <SelectItem value="customer">Cliente</SelectItem>
+                  <SelectItem value="specifier">Especificador</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setEditDialog({ open: false, userId: null, data: { full_name: "", email: "", doc: "" } })}
+              onClick={() => setEditDialog({ open: false, userId: null, currentRole: null, data: { full_name: "", email: "", doc: "", role: "" } })}
               disabled={updateUserMutation.isPending}
             >
               Cancelar
