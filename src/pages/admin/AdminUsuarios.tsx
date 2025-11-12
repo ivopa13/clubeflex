@@ -91,6 +91,31 @@ const AdminUsuarios = () => {
     },
   });
 
+  const linkUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Não autenticado');
+
+      const { data, error } = await supabase.functions.invoke('link-user-to-actor', {
+        body: { userId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success(`Vinculado a ${data.linkedTo}: ${data.actorName}`);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Erro ao vincular usuário');
+    },
+  });
+
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data }: { userId: string; data: { full_name: string; email: string; doc: string } }) => {
       const { error } = await supabase
@@ -184,6 +209,7 @@ const AdminUsuarios = () => {
                 <TableRow>
                   <TableHead>Email</TableHead>
                   <TableHead>Nome</TableHead>
+                  <TableHead>CPF/CNPJ</TableHead>
                   <TableHead>Role Atual</TableHead>
                   <TableHead>Atribuir Role</TableHead>
                   <TableHead>Cadastro</TableHead>
@@ -198,6 +224,7 @@ const AdminUsuarios = () => {
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.email}</TableCell>
                       <TableCell>{user.full_name || "-"}</TableCell>
+                      <TableCell>{user.doc ? formatCpfCnpj(user.doc) : "-"}</TableCell>
                       <TableCell>
                         {currentRole ? (
                           <Badge variant={currentRole.variant}>{currentRole.label}</Badge>
@@ -235,13 +262,27 @@ const AdminUsuarios = () => {
                         {format(new Date(user.created_at), "dd/MM/yy", { locale: ptBR })}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(user)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(user)}
+                            title="Editar"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {user.doc && !currentRole && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => linkUserMutation.mutate(user.id)}
+                              disabled={linkUserMutation.isPending}
+                              title="Vincular ao customer/specifier pelo CPF/CNPJ"
+                            >
+                              {linkUserMutation.isPending ? '...' : 'Vincular'}
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

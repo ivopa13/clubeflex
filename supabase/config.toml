@@ -2,3 +2,6 @@ project_id = "skhljdaqfzweshjrlcnn"
 
 [functions.sync-log]
 verify_jwt = false
+
+[functions.link-user-to-actor]
+verify_jwt = true
