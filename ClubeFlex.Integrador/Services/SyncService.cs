@@ -120,25 +120,37 @@ public class SyncService
     }
 
     /// <summary>
-    /// Sincroniza pagamentos confirmados
+    /// Sincroniza pagamentos confirmados (a prazo + à vista)
     /// </summary>
     private async Task SyncPaymentsAsync()
     {
         try
         {
             var limit = _testMode ? _testModeLimit : (int?)null;
-            var payments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate);
+            
+            // Buscar pagamentos a prazo (CONTARECEBERREC)
+            var creditPayments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate);
+            
+            // Buscar pagamentos à vista (MOVENDAREC)
+            var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate);
+            
+            // Combinar ambas as listas
+            var allPayments = creditPayments.Concat(cashPayments).ToList();
 
-            if (payments.Count == 0)
+            if (allPayments.Count == 0)
             {
                 Log.Information("Nenhum pagamento novo para sincronizar");
                 return;
             }
 
+            Log.Information($"📊 Total de pagamentos encontrados: {allPayments.Count}");
+            Log.Information($"   - Pagamentos a prazo (CONTARECEBERREC): {creditPayments.Count}");
+            Log.Information($"   - Pagamentos à vista (MOVENDAREC): {cashPayments.Count}");
+
             int success = 0;
             int errors = 0;
 
-            foreach (var payment in payments)
+            foreach (var payment in allPayments)
             {
                 var result = await SendWithRetryAsync(
                     async () => await _apiService.SendPaymentConfirmedAsync(payment),
@@ -163,7 +175,7 @@ public class SyncService
                     errors++;
             }
 
-            Log.Information($"Pagamentos processados: {success} sucesso, {errors} erros");
+            Log.Information($"✅ Pagamentos processados: {success} sucesso, {errors} erros");
         }
         catch (Exception ex)
         {
