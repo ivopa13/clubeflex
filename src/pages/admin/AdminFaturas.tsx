@@ -1,14 +1,19 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const AdminFaturas = () => {
+  const [ascending, setAscending] = useState(false);
+
   const { data: invoices, isLoading } = useQuery({
-    queryKey: ["admin-invoices"],
+    queryKey: ["admin-invoices", ascending],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
@@ -17,7 +22,7 @@ const AdminFaturas = () => {
           customer:customers(name),
           specifier:specifiers(name)
         `)
-        .order("invoice_id_ext", { ascending: false });
+        .order("invoice_id_ext", { ascending });
 
       if (error) throw error;
       return data;
@@ -34,7 +39,18 @@ const AdminFaturas = () => {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Faturas</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Faturas</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setAscending(!ascending)}
+          className="gap-2"
+        >
+          <ArrowUpDown className="h-4 w-4" />
+          {ascending ? "Crescente" : "Decrescente"}
+        </Button>
+      </div>
 
       <Card>
         <CardHeader>
