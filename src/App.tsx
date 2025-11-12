@@ -28,6 +28,7 @@ import AdminPagamentos from "./pages/admin/AdminPagamentos";
 import AdminClientesPendentes from "./pages/admin/AdminClientesPendentes";
 import AdminEspecificadoresPendentes from "./pages/admin/AdminEspecificadoresPendentes";
 import AdminPerfil from "./pages/admin/AdminPerfil";
+import AdminGerenciarCadastros from "./pages/admin/AdminGerenciarCadastros";
 
 const queryClient = new QueryClient();
 
@@ -130,6 +131,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminUsuarios />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/gerenciar-cadastros"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminGerenciarCadastros />
                 </AdminLayout>
               </AuthGuard>
             }
