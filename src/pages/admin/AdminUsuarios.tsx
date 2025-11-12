@@ -20,11 +20,11 @@ const AdminUsuarios = () => {
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
     userId: string | null;
-    data: { full_name: string; email: string };
+    data: { full_name: string; email: string; doc: string };
   }>({
     open: false,
     userId: null,
-    data: { full_name: "", email: "" },
+    data: { full_name: "", email: "", doc: "" },
   });
 
   const { data: users, isLoading } = useQuery({
@@ -71,12 +71,13 @@ const AdminUsuarios = () => {
   });
 
   const updateUserMutation = useMutation({
-    mutationFn: async ({ userId, data }: { userId: string; data: { full_name: string; email: string } }) => {
+    mutationFn: async ({ userId, data }: { userId: string; data: { full_name: string; email: string; doc: string } }) => {
       const { error } = await supabase
         .from("profiles")
         .update({
           full_name: data.full_name.trim(),
           email: data.email.trim(),
+          doc: data.doc.trim() || null,
         })
         .eq("id", userId);
 
@@ -85,7 +86,7 @@ const AdminUsuarios = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast.success("Usuário atualizado com sucesso!");
-      setEditDialog({ open: false, userId: null, data: { full_name: "", email: "" } });
+      setEditDialog({ open: false, userId: null, data: { full_name: "", email: "", doc: "" } });
     },
     onError: (error: Error) => {
       toast.error(`Erro ao atualizar: ${error.message}`);
@@ -108,6 +109,7 @@ const AdminUsuarios = () => {
       data: {
         full_name: user.full_name || "",
         email: user.email || "",
+        doc: user.doc || "",
       },
     });
   };
@@ -263,10 +265,25 @@ const AdminUsuarios = () => {
             </div>
           </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="doc">CPF/CNPJ</Label>
+              <Input
+                id="doc"
+                value={editDialog.data.doc}
+                onChange={(e) => setEditDialog({
+                  ...editDialog,
+                  data: { ...editDialog.data, doc: e.target.value }
+                })}
+                placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                disabled={updateUserMutation.isPending}
+              />
+            </div>
+          </div>
+
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setEditDialog({ open: false, userId: null, data: { full_name: "", email: "" } })}
+              onClick={() => setEditDialog({ open: false, userId: null, data: { full_name: "", email: "", doc: "" } })}
               disabled={updateUserMutation.isPending}
             >
               Cancelar
