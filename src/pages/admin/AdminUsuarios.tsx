@@ -263,7 +263,6 @@ const AdminUsuarios = () => {
                 disabled={updateUserMutation.isPending}
               />
             </div>
-          </div>
 
             <div className="space-y-2">
               <Label htmlFor="doc">CPF/CNPJ</Label>
