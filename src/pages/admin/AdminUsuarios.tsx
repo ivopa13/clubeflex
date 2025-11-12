@@ -74,12 +74,14 @@ const AdminUsuarios = () => {
     mutationFn: async ({ userId, data }: { userId: string; data: { full_name: string; email: string; doc: string } }) => {
       const { error } = await supabase
         .from("profiles")
-        .update({
+        .upsert({
+          id: userId,
           full_name: data.full_name.trim(),
           email: data.email.trim(),
           doc: data.doc.trim() || null,
-        })
-        .eq("id", userId);
+        }, {
+          onConflict: 'id'
+        });
 
       if (error) throw error;
     },
