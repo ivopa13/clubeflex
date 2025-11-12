@@ -61,14 +61,14 @@ Deno.serve(async (req) => {
 
     // Buscar perfis para refletir edições feitas em /admin/usuarios
     const userIds = (listed?.users || []).map((u) => u.id)
-    let profilesById: Record<string, { full_name: string | null; email: string | null }> = {}
+    let profilesById: Record<string, { full_name: string | null; email: string | null; doc: string | null }> = {}
     if (userIds.length > 0) {
       const { data: profiles } = await supabaseAdmin
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, full_name, email, doc')
         .in('id', userIds)
       profilesById = Object.fromEntries(
-        (profiles ?? []).map((p: any) => [p.id, { full_name: p.full_name, email: p.email }])
+        (profiles ?? []).map((p: any) => [p.id, { full_name: p.full_name, email: p.email, doc: p.doc }])
       )
     }
 
@@ -79,6 +79,7 @@ Deno.serve(async (req) => {
         id: u.id,
         email: profile?.email ?? u.email,
         full_name: profile?.full_name ?? u.user_metadata?.full_name ?? null,
+        doc: profile?.doc ?? null,
         role,
         created_at: u.created_at,
       }
