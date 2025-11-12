@@ -151,7 +151,7 @@ public class DatabaseService
         var payments = new List<PagamentoPayload>();
 
         var batchSize = limit ?? 100;
-        var dateFilter = fromDate.HasValue ? $"AND cr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+        var dateFilter = fromDate.HasValue ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         var query = $@"
             SELECT FIRST {batchSize}
