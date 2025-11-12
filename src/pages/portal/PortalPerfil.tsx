@@ -48,9 +48,11 @@ export default function PortalPerfil() {
           .from("customers")
           .select("name, email, phone, doc, created_at, customer_id_ext")
           .eq("id", actorId)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
+        if (!data) throw new Error("Cadastro não encontrado");
+        
         return {
           ...data,
           actorType,
@@ -61,9 +63,11 @@ export default function PortalPerfil() {
           .from("specifiers")
           .select("name, email, phone, doc, created_at, specifier_id_ext")
           .eq("id", actorId)
-          .single();
+          .maybeSingle();
 
         if (error) throw error;
+        if (!data) throw new Error("Cadastro não encontrado");
+        
         return {
           ...data,
           actorType,

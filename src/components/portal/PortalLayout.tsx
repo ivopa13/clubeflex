@@ -23,14 +23,14 @@ export const PortalLayout = ({ children }: PortalLayoutProps) => {
             .from("customers")
             .select("name")
             .eq("id", actorId)
-            .single();
+            .maybeSingle();
           if (data) setUserName(data.name);
         } else if (actorType === "specifier") {
           const { data } = await supabase
             .from("specifiers")
             .select("name")
             .eq("id", actorId)
-            .single();
+            .maybeSingle();
           if (data) setUserName(data.name);
         }
       } catch (error) {
