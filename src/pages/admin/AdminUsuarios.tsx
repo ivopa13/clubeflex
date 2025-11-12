@@ -14,6 +14,27 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Edit, Loader2 } from "lucide-react";
 
+const formatCpfCnpj = (value: string) => {
+  const numbers = value.replace(/\D/g, "");
+  
+  if (numbers.length <= 11) {
+    // CPF: 000.000.000-00
+    return numbers
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  } else {
+    // CNPJ: 00.000.000/0000-00
+    return numbers
+      .replace(/(\d{2})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1/$2")
+      .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+  }
+};
+
+const removeMask = (value: string) => value.replace(/\D/g, "");
+
 const AdminUsuarios = () => {
   const queryClient = useQueryClient();
   const [selectedRoles, setSelectedRoles] = useState<{ [key: string]: string }>({});
@@ -111,7 +132,7 @@ const AdminUsuarios = () => {
       data: {
         full_name: user.full_name || "",
         email: user.email || "",
-        doc: user.doc || "",
+        doc: user.doc ? formatCpfCnpj(user.doc) : "",
       },
     });
   };
@@ -131,7 +152,11 @@ const AdminUsuarios = () => {
 
     updateUserMutation.mutate({
       userId: editDialog.userId,
-      data: editDialog.data,
+      data: {
+        full_name: editDialog.data.full_name,
+        email: editDialog.data.email,
+        doc: removeMask(editDialog.data.doc),
+      },
     });
   };
 
@@ -271,12 +296,16 @@ const AdminUsuarios = () => {
               <Input
                 id="doc"
                 value={editDialog.data.doc}
-                onChange={(e) => setEditDialog({
-                  ...editDialog,
-                  data: { ...editDialog.data, doc: e.target.value }
-                })}
+                onChange={(e) => {
+                  const formatted = formatCpfCnpj(e.target.value);
+                  setEditDialog({
+                    ...editDialog,
+                    data: { ...editDialog.data, doc: formatted }
+                  });
+                }}
                 placeholder="000.000.000-00 ou 00.000.000/0000-00"
                 disabled={updateUserMutation.isPending}
+                maxLength={18}
               />
             </div>
           </div>
