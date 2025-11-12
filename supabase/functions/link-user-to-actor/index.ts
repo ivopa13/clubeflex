@@ -68,13 +68,14 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Buscar doc do profile
+    // Buscar doc do profile (prioridade sobre metadata)
     const { data: profile } = await supabaseAdmin
       .from('profiles')
       .select('doc')
       .eq('id', targetUserId)
       .maybeSingle()
 
+    // Priorizar profiles.doc, fallback para metadata
     const userDoc = profile?.doc || targetUser.user.user_metadata?.doc
     
     if (!userDoc) {
