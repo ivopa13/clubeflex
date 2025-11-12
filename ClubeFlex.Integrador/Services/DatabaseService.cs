@@ -202,6 +202,84 @@ public class DatabaseService
     }
 
     /// <summary>
+    /// Busca pagamentos à vista (MOVENDAREC) que foram quitados imediatamente
+    /// Exclui: Vale, Carnê, A Prazo, Promissória, Cheque e Boleto
+    /// </summary>
+    public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null)
+    {
+        var payments = new List<PagamentoPayload>();
+
+        var batchSize = limit ?? 100;
+        var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+
+        // Códigos de recebimento que devem ser EXCLUÍDOS:
+        // 007 = Vale
+        // 008 = Carnê
+        // 009 = A Prazo
+        // 033 = Promissória
+        // 002 = Cheque (deixar para implementação futura)
+        // 010 = Cobrança Bancária/Boleto (deixar para implementação futura)
+        var excludedCodes = "'002', '008', '009', '010', '033'";
+
+        var query = $@"
+            SELECT FIRST {batchSize}
+                TRIM(mr.CODMOVENDAREC) as payment_id,
+                TRIM(m.CODMOVENDA) as invoice_id,
+                mr.VALOR as paid_amount,
+                m.DATA as paid_at,
+                TRIM(r.CODREC) as payment_code,
+                TRIM(r.RECEBIMENTO) as payment_type
+            FROM MOVENDAREC mr
+            INNER JOIN MOVENDA m ON mr.CODMOVENDA = m.CODMOVENDA
+            INNER JOIN RECEBIMENTO r ON mr.CODREC = r.CODREC
+            WHERE mr.VALOR > 0
+            AND m.CODCLI <> 3005
+            {dateFilter}
+            AND TRIM(r.CODREC) NOT IN ({excludedCodes})
+            ORDER BY m.DATA DESC, mr.CODMOVENDAREC DESC";
+
+        try
+        {
+            using var connection = new FbConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new FbCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var paymentId = reader["payment_id"].ToString() ?? "";
+                var invoiceId = reader["invoice_id"].ToString() ?? "";
+                var eventId = $"PAG_VISTA_{paymentId}";
+
+                var paymentType = reader["payment_type"].ToString() ?? "";
+                var paymentCode = reader["payment_code"].ToString() ?? "";
+
+                var payload = new PagamentoPayload
+                {
+                    EventId = eventId,
+                    InvoiceIdExt = invoiceId,
+                    PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
+                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd")
+                };
+
+                payments.Add(payload);
+                
+                Log.Debug($"Pagamento à vista encontrado: {eventId} - Tipo: {paymentType} (Código: {paymentCode}) - Fatura: {invoiceId} - Valor: {payload.PaidAmount}");
+            }
+
+            Log.Information($"Encontrados {payments.Count} novos pagamentos à vista para sincronizar");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro ao buscar pagamentos à vista do banco de dados");
+            throw;
+        }
+
+        return payments;
+    }
+
+    /// <summary>
     /// Testa a conexão com o banco de dados (somente leitura)
     /// </summary>
     public async Task<bool> TestConnectionAsync()
