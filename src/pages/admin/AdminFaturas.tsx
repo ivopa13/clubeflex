@@ -17,7 +17,7 @@ const AdminFaturas = () => {
           customer:customers(name),
           specifier:specifiers(name)
         `)
-        .order("created_at", { ascending: false });
+        .order("invoice_id_ext", { ascending: false });
 
       if (error) throw error;
       return data;
@@ -48,8 +48,8 @@ const AdminFaturas = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nº Pedido</TableHead>
                   <TableHead>Código</TableHead>
+                  <TableHead>Nº Pedido</TableHead>
                   <TableHead>Cliente</TableHead>
                   <TableHead>Especificador</TableHead>
                   <TableHead>Valor</TableHead>
@@ -73,8 +73,8 @@ const AdminFaturas = () => {
                   
                   return (
                     <TableRow key={invoice.id}>
-                      <TableCell className="font-mono text-sm">{invoice.order_number || "-"}</TableCell>
                       <TableCell className="font-mono text-sm">{invoice.invoice_id_ext}</TableCell>
+                      <TableCell className="font-mono text-sm">{invoice.order_number || "-"}</TableCell>
                       <TableCell className="font-medium">{invoice.customer?.name || "N/A"}</TableCell>
                       <TableCell>{invoice.specifier?.name || "-"}</TableCell>
                       <TableCell>R$ {Number(invoice.total_amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
