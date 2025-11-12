@@ -6,14 +6,26 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { UserPlus } from "lucide-react";
+import { Edit, Loader2 } from "lucide-react";
 
 const AdminUsuarios = () => {
   const queryClient = useQueryClient();
   const [selectedRoles, setSelectedRoles] = useState<{ [key: string]: string }>({});
+  const [editDialog, setEditDialog] = useState<{
+    open: boolean;
+    userId: string | null;
+    data: { full_name: string; email: string };
+  }>({
+    open: false,
+    userId: null,
+    data: { full_name: "", email: "" },
+  });
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -58,6 +70,28 @@ const AdminUsuarios = () => {
     },
   });
 
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ userId, data }: { userId: string; data: { full_name: string; email: string } }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          full_name: data.full_name.trim(),
+          email: data.email.trim(),
+        })
+        .eq("id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      toast.success("Usuário atualizado com sucesso!");
+      setEditDialog({ open: false, userId: null, data: { full_name: "", email: "" } });
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao atualizar: ${error.message}`);
+    },
+  });
+
   const handleAssignRole = (userId: string) => {
     const role = selectedRoles[userId];
     if (!role) {
@@ -65,6 +99,36 @@ const AdminUsuarios = () => {
       return;
     }
     assignRoleMutation.mutate({ userId, role });
+  };
+
+  const handleEdit = (user: any) => {
+    setEditDialog({
+      open: true,
+      userId: user.id,
+      data: {
+        full_name: user.full_name || "",
+        email: user.email || "",
+      },
+    });
+  };
+
+  const handleSaveUser = () => {
+    if (!editDialog.userId) return;
+    
+    if (!editDialog.data.full_name.trim()) {
+      toast.error("Nome é obrigatório");
+      return;
+    }
+    
+    if (!editDialog.data.email.trim()) {
+      toast.error("Email é obrigatório");
+      return;
+    }
+
+    updateUserMutation.mutate({
+      userId: editDialog.userId,
+      data: editDialog.data,
+    });
   };
 
   const roleMap = {
@@ -94,6 +158,7 @@ const AdminUsuarios = () => {
                   <TableHead>Role Atual</TableHead>
                   <TableHead>Atribuir Role</TableHead>
                   <TableHead>Cadastro</TableHead>
+                  <TableHead>Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -140,6 +205,15 @@ const AdminUsuarios = () => {
                       <TableCell>
                         {format(new Date(user.created_at), "dd/MM/yy", { locale: ptBR })}
                       </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(user)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -148,6 +222,65 @@ const AdminUsuarios = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={editDialog.open} onOpenChange={(open) => !updateUserMutation.isPending && setEditDialog({ ...editDialog, open })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Usuário</DialogTitle>
+            <DialogDescription>
+              Atualize os dados do usuário
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email *</Label>
+              <Input
+                id="email"
+                type="email"
+                value={editDialog.data.email}
+                onChange={(e) => setEditDialog({
+                  ...editDialog,
+                  data: { ...editDialog.data, email: e.target.value }
+                })}
+                placeholder="email@exemplo.com"
+                disabled={updateUserMutation.isPending}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="full_name">Nome Completo *</Label>
+              <Input
+                id="full_name"
+                value={editDialog.data.full_name}
+                onChange={(e) => setEditDialog({
+                  ...editDialog,
+                  data: { ...editDialog.data, full_name: e.target.value }
+                })}
+                placeholder="Nome completo"
+                disabled={updateUserMutation.isPending}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditDialog({ open: false, userId: null, data: { full_name: "", email: "" } })}
+              disabled={updateUserMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleSaveUser}
+              disabled={updateUserMutation.isPending}
+            >
+              {updateUserMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
