@@ -223,7 +223,6 @@ public class DatabaseService
 
         var query = $@"
             SELECT FIRST {batchSize}
-                TRIM(mr.CODMOVENDAREC) as payment_id,
                 TRIM(m.CODMOVENDA) as invoice_id,
                 mr.VALOR as paid_amount,
                 m.DATA as paid_at,
@@ -236,7 +235,7 @@ public class DatabaseService
             AND m.CODCLI <> 3005
             {dateFilter}
             AND TRIM(r.CODREC) NOT IN ({excludedCodes})
-            ORDER BY m.DATA DESC, mr.CODMOVENDAREC DESC";
+            ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
 
         try
         {
@@ -248,12 +247,10 @@ public class DatabaseService
 
             while (await reader.ReadAsync())
             {
-                var paymentId = reader["payment_id"].ToString() ?? "";
                 var invoiceId = reader["invoice_id"].ToString() ?? "";
-                var eventId = $"PAG_VISTA_{paymentId}";
-
-                var paymentType = reader["payment_type"].ToString() ?? "";
                 var paymentCode = reader["payment_code"].ToString() ?? "";
+                var eventId = $"PAG_VISTA_{invoiceId}_{paymentCode}";
+                var paymentType = reader["payment_type"].ToString() ?? "";
 
                 var payload = new PagamentoPayload
                 {
