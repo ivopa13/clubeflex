@@ -4,6 +4,8 @@ import { PortalSidebar } from "./PortalSidebar";
 import logoFlex from "@/assets/logo-flex.png";
 import { supabase } from "@/integrations/supabase/client";
 import { getUserActorInfo } from "@/lib/userRole";
+import { usePortalBalance } from "@/hooks/usePortalBalance";
+import { Coins } from "lucide-react";
 
 interface PortalLayoutProps {
   children: React.ReactNode;
@@ -11,6 +13,7 @@ interface PortalLayoutProps {
 
 export const PortalLayout = ({ children }: PortalLayoutProps) => {
   const [userName, setUserName] = useState<string>("");
+  const { data: balance } = usePortalBalance();
 
   useEffect(() => {
     const fetchUserName = async () => {
@@ -48,13 +51,24 @@ export const PortalLayout = ({ children }: PortalLayoutProps) => {
         <div className="flex-1 flex flex-col">
           <header className="h-16 border-b flex items-center px-4 bg-card gap-3">
             <SidebarTrigger />
-            <div>
+            <div className="flex-1">
               <h1 className="text-xl font-bold text-primary">FLEX Clube</h1>
               <p className="text-xs text-muted-foreground">
                 {userName ? `Bem-vindo, ${userName}` : "Bem-vindo"}
               </p>
             </div>
-            <img src={logoFlex} alt="FLEX Clube" className="h-12 object-contain ml-auto" />
+            {balance && (
+              <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 border border-primary/20">
+                <Coins className="h-5 w-5 text-primary" />
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Pontos Disponíveis</p>
+                  <p className="text-lg font-bold text-primary">
+                    {balance.redeemable.toLocaleString('pt-BR')}
+                  </p>
+                </div>
+              </div>
+            )}
+            <img src={logoFlex} alt="FLEX Clube" className="h-12 object-contain" />
           </header>
           <main className="flex-1 p-6 bg-background">
             {children}
