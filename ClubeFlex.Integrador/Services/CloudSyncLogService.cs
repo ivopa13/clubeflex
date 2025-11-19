@@ -9,7 +9,8 @@ namespace ClubeFlex.Integrador.Services;
 public class CloudSyncLogService
 {
     private readonly HttpClient _httpClient;
-    private readonly string _baseUrl;
+    private readonly string _functionsUrl;
+    private readonly string _apiUrl;
     private readonly string _apiKey;
 
     public CloudSyncLogService(IConfiguration configuration)
@@ -17,10 +18,20 @@ public class CloudSyncLogService
         _httpClient = new HttpClient();
         
         var apiConfig = configuration.GetSection("ClubeFlexApi");
-        _baseUrl = apiConfig["BaseUrl"] ?? throw new Exception("BaseUrl não configurado");
+        var baseUrl = apiConfig["BaseUrl"] ?? throw new Exception("BaseUrl não configurado");
         _apiKey = apiConfig["ApiKey"] ?? throw new Exception("ApiKey não configurado");
         
+        // Separar URLs para Edge Functions e PostgREST
+        var cleanBaseUrl = baseUrl.Replace("/rest/v1", "").Replace("/functions/v1", "");
+        _functionsUrl = $"{cleanBaseUrl}/functions/v1";
+        _apiUrl = $"{cleanBaseUrl}/rest/v1";
+        
+        Log.Debug($"🔧 CloudSyncLogService configurado:");
+        Log.Debug($"   Functions URL: {_functionsUrl}");
+        Log.Debug($"   API URL: {_apiUrl}");
+        
         _httpClient.DefaultRequestHeaders.Add("apikey", _apiKey);
+        _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
     }
 
     public async Task SaveSyncLogAsync(SyncLog log)
@@ -49,7 +60,7 @@ public class CloudSyncLogService
             var json = JsonSerializer.Serialize(payload);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var response = await _httpClient.PostAsync($"{_baseUrl}/sync-log", content);
+            var response = await _httpClient.PostAsync($"{_functionsUrl}/sync-log", content);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -73,13 +84,17 @@ public class CloudSyncLogService
         
         try
         {
-            var response = await _httpClient.GetAsync(
-                $"{_baseUrl}/rest/v1/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id"
-            );
+            var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id";
+            
+            Log.Debug($"🔍 Consultando sync_logs: {url}");
+            
+            var response = await _httpClient.GetAsync(url);
             
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
+                Log.Debug($"📥 Response JSON: {json.Substring(0, Math.Min(200, json.Length))}...");
+                
                 var logs = JsonSerializer.Deserialize<List<SyncLogResponse>>(json);
                 
                 foreach (var log in logs ?? Enumerable.Empty<SyncLogResponse>())
@@ -88,12 +103,17 @@ public class CloudSyncLogService
                         eventIds.Add(log.EventId);
                 }
                 
-                Log.Information($"📋 {eventIds.Count} event_ids já sincronizados ({eventType})");
+                Log.Information($"✅ {eventIds.Count} event_ids já sincronizados ({eventType})");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log.Warning($"❌ Erro ao consultar sync_logs: {response.StatusCode} - {errorContent}");
             }
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, $"Não foi possível consultar logs sincronizados ({eventType}). Continuando sem filtro.");
+            Log.Warning(ex, $"⚠️ Não foi possível consultar logs sincronizados ({eventType}). Continuando sem filtro.");
         }
         
         return eventIds;
