@@ -20,6 +20,7 @@ interface Payment {
   paid_amount: number;
   paid_at: string;
   created_at: string;
+  payment_type: string;
   invoice: {
     invoice_id_ext: string;
     customer: {
@@ -27,6 +28,19 @@ interface Payment {
     };
   };
 }
+
+const getPaymentTypeBadge = (type: string) => {
+  const types: Record<string, { label: string; color: string }> = {
+    check: { label: "Cheque", color: "#ff914d" },
+    credit: { label: "A Prazo", color: "#18375d" },
+    cash: { label: "Dinheiro", color: "#10b981" },
+    card: { label: "Cartão", color: "#8b5cf6" },
+    boleto: { label: "Boleto", color: "#f59e0b" },
+    unknown: { label: "Não identificado", color: "#6b7280" }
+  };
+  
+  return types[type as keyof typeof types] || types.unknown;
+};
 
 const AdminPagamentos = () => {
   const { data: payments, isLoading } = useQuery({
@@ -133,6 +147,7 @@ const AdminPagamentos = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>ID do Evento</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead>Fatura</TableHead>
                 <TableHead>Cliente</TableHead>
                 <TableHead>Valor Pago</TableHead>
@@ -141,40 +156,56 @@ const AdminPagamentos = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments?.map((payment) => (
-                <TableRow key={payment.id}>
-                  <TableCell>
-                    <Badge variant="outline" className="font-mono text-xs">
-                      {payment.payment_event_id}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">
-                        {payment.invoice?.invoice_id_ext || "-"}
+              {payments?.map((payment) => {
+                const typeBadge = getPaymentTypeBadge(payment.payment_type);
+                
+                return (
+                  <TableRow key={payment.id}>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono text-xs">
+                        {payment.payment_event_id}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        variant="outline" 
+                        style={{ 
+                          backgroundColor: typeBadge.color, 
+                          color: 'white',
+                          borderColor: typeBadge.color
+                        }}
+                      >
+                        {typeBadge.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">
+                          {payment.invoice?.invoice_id_ext || "-"}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {payment.invoice?.customer?.name || "N/A"}
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-semibold" style={{ color: "#ff914d" }}>
+                        {new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(Number(payment.paid_amount))}
                       </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {payment.invoice?.customer?.name || "N/A"}
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-semibold" style={{ color: "#ff914d" }}>
-                      {new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }).format(Number(payment.paid_amount))}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {format(new Date(payment.paid_at), "dd/MM/yyyy")}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {format(new Date(payment.created_at), "dd/MM/yyyy HH:mm")}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    </TableCell>
+                    <TableCell>
+                      {format(new Date(payment.paid_at), "dd/MM/yyyy")}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {format(new Date(payment.created_at), "dd/MM/yyyy HH:mm")}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               {!payments?.length && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground">
