@@ -298,6 +298,79 @@ public class DatabaseService
     }
 
     /// <summary>
+    /// Busca cheques compensados (depositados e não devolvidos)
+    /// </summary>
+    public async Task<List<PagamentoPayload>> GetClearedChecksAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
+    {
+        var checks = new List<PagamentoPayload>();
+
+        var batchSize = limit ?? 100;
+        var dateFilter = fromDate.HasValue ? $"AND c.DEPOSITO >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+
+        var query = $@"
+            SELECT FIRST {batchSize}
+                TRIM(c.CODMOVENDA) as invoice_id,
+                c.VALOR as paid_amount,
+                c.DEPOSITO as paid_at,
+                TRIM(c.NUMCHEQUE) as check_number,
+                TRIM(c.BANCO) as bank,
+                TRIM(c.CODCHEQUE) as check_code
+            FROM CHEQUES c
+            INNER JOIN MOVENDA m ON c.CODMOVENDA = m.CODMOVENDA
+            WHERE c.DEPOSITO IS NOT NULL
+                AND (c.RETORNOU IS NULL OR c.RETORNOU <> 'S')
+                AND c.VALOR > 0
+                AND m.CODCLI <> 3005
+                {dateFilter}
+            ORDER BY c.DEPOSITO DESC";
+
+        try
+        {
+            using var connection = new FbConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new FbCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var invoiceId = reader["invoice_id"].ToString() ?? "";
+                var checkNumber = reader["check_number"].ToString() ?? "";
+                var bank = reader["bank"].ToString() ?? "";
+                var eventId = $"CHQ_{invoiceId}_{checkNumber}";
+
+                // Pular se já foi sincronizado
+                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
+                {
+                    Log.Debug($"⏭️  Pulando cheque {eventId} - já sincronizado");
+                    continue;
+                }
+
+                var payload = new PagamentoPayload
+                {
+                    EventId = eventId,
+                    InvoiceIdExt = invoiceId,
+                    PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
+                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd")
+                };
+
+                checks.Add(payload);
+                
+                Log.Debug($"✅ Cheque compensado: {eventId} - Banco: {bank} - Fatura: {invoiceId} - Valor: {payload.PaidAmount:C}");
+            }
+
+            Log.Information($"Encontrados {checks.Count} cheques compensados para sincronizar");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro ao buscar cheques compensados do banco de dados");
+            throw;
+        }
+
+        return checks;
+    }
+
+    /// <summary>
     /// Testa a conexão com o banco de dados (somente leitura)
     /// </summary>
     public async Task<bool> TestConnectionAsync()
