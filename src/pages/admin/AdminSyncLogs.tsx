@@ -9,9 +9,34 @@ import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Eye } from "lucide-react";
+import { Eye, FileText, DollarSign } from "lucide-react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useState } from "react";
+
+interface SyncLog {
+  id: string;
+  event_id: string;
+  event_type: string;
+  status: string;
+  attempts: number;
+  created_at: string;
+  payload: any;
+  error_message: string | null;
+}
+
+interface SyncExecution {
+  timestamp: Date;
+  logs: SyncLog[];
+  totalEvents: number;
+  invoiceCount: number;
+  paymentCount: number;
+  successCount: number;
+  errorCount: number;
+}
 
 const AdminSyncLogs = () => {
+  const [selectedLog, setSelectedLog] = useState<SyncLog | null>(null);
+
   const { data: logs, isLoading } = useQuery({
     queryKey: ["sync-logs"],
     queryFn: async () => {
@@ -19,12 +44,15 @@ const AdminSyncLogs = () => {
         .from("sync_logs")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(200);
 
       if (error) throw error;
-      return data;
+      return data as SyncLog[];
     },
   });
+
+  // Group logs by execution (same minute)
+  const executions: SyncExecution[] = logs ? groupLogsByExecution(logs) : [];
 
   if (isLoading) {
     return (
@@ -49,111 +77,220 @@ const AdminSyncLogs = () => {
   };
 
   const eventTypeMap = {
-    invoice_created: { label: "Fatura Criada", color: "text-blue-600" },
-    payment_confirmed: { label: "Pagamento Confirmado", color: "text-green-600" },
+    invoice_created: { label: "Fatura", icon: FileText },
+    payment_confirmed: { label: "Pagamento", icon: DollarSign },
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Logs de Integração</h1>
-        <p className="text-muted-foreground mt-2">Visualize os dados recebidos do integrador Windows</p>
+        <p className="text-muted-foreground mt-2">Histórico de execuções do integrador Windows</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Histórico de Sincronização</CardTitle>
-          <CardDescription>Últimos 100 registros sincronizados</CardDescription>
+          <CardTitle>Execuções do Integrador</CardTitle>
+          <CardDescription>
+            {executions.length > 0 
+              ? `${executions.length} execuções encontradas`
+              : "Nenhuma execução registrada"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Evento ID</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Tentativas</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {logs?.map((log: any) => {
-                const status = statusMap[log.status as keyof typeof statusMap];
-                const eventType = eventTypeMap[log.event_type as keyof typeof eventTypeMap];
+          {!executions || executions.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>Nenhum log de sincronização encontrado.</p>
+            </div>
+          ) : (
+            <Accordion type="single" collapsible className="space-y-4">
+              {executions.map((execution, index) => {
+                const hasErrors = execution.errorCount > 0;
+                const statusVariant = hasErrors ? "destructive" : "default";
+                const statusClassName = hasErrors ? "" : "bg-green-500 hover:bg-green-600";
 
                 return (
-                  <TableRow key={log.id}>
-                    <TableCell className="font-mono text-xs">{log.event_id}</TableCell>
-                    <TableCell>
-                      <span className={`font-medium ${eventType?.color || ""}`}>
-                        {eventType?.label || log.event_type}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={status.variant} className={status.className}>
-                        {status.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{log.attempts}</TableCell>
-                    <TableCell>
-                      {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4 mr-2" />
-                            Ver JSON
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-3xl">
-                          <DialogHeader>
-                            <DialogTitle>Detalhes do Evento</DialogTitle>
-                            <DialogDescription>
-                              {eventType?.label || log.event_type} - {log.event_id}
-                            </DialogDescription>
-                          </DialogHeader>
-                          <div className="space-y-4">
-                            <div>
-                              <h4 className="font-semibold mb-2">Status: {status.label}</h4>
-                              {log.error_message && (
-                                <div className="bg-destructive/10 text-destructive p-3 rounded-md text-sm">
-                                  <strong>Erro:</strong> {log.error_message}
-                                </div>
+                  <AccordionItem 
+                    key={`execution-${execution.timestamp.getTime()}`} 
+                    value={`execution-${index}`}
+                    className="border rounded-lg px-4 bg-card"
+                  >
+                    <AccordionTrigger className="hover:no-underline py-4">
+                      <div className="flex items-center justify-between w-full pr-4">
+                        <div className="flex items-center gap-4">
+                          <div className="text-left">
+                            <div className="font-semibold text-base">
+                              {format(execution.timestamp, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            </div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {execution.invoiceCount > 0 && (
+                                <span className="inline-flex items-center gap-1 mr-3">
+                                  <FileText className="h-3 w-3" />
+                                  {execution.invoiceCount} {execution.invoiceCount === 1 ? 'fatura' : 'faturas'}
+                                </span>
+                              )}
+                              {execution.paymentCount > 0 && (
+                                <span className="inline-flex items-center gap-1">
+                                  <DollarSign className="h-3 w-3" />
+                                  {execution.paymentCount} {execution.paymentCount === 1 ? 'pagamento' : 'pagamentos'}
+                                </span>
                               )}
                             </div>
-                            <div>
-                              <h4 className="font-semibold mb-2">Payload Recebido:</h4>
-                              <ScrollArea className="h-96 w-full rounded-md border">
-                                <pre className="p-4 text-xs">
-                                  {JSON.stringify(log.payload, null, 2)}
-                                </pre>
-                              </ScrollArea>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              <p>Criado em: {format(new Date(log.created_at), "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR })}</p>
-                              <p>Atualizado em: {format(new Date(log.updated_at), "dd/MM/yyyy 'às' HH:mm:ss", { locale: ptBR })}</p>
-                              <p>Tentativas: {log.attempts}</p>
-                            </div>
                           </div>
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </TableRow>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          <Badge variant={statusVariant} className={statusClassName}>
+                            {execution.successCount} {execution.successCount === 1 ? 'sucesso' : 'sucessos'}
+                          </Badge>
+                          {hasErrors && (
+                            <Badge variant="destructive">
+                              {execution.errorCount} {execution.errorCount === 1 ? 'erro' : 'erros'}
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className="ml-2">
+                            {execution.totalEvents} {execution.totalEvents === 1 ? 'evento' : 'eventos'}
+                          </Badge>
+                        </div>
+                      </div>
+                    </AccordionTrigger>
+                    
+                    <AccordionContent className="pb-4 pt-2">
+                      <div className="border rounded-md">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[140px]">Event ID</TableHead>
+                              <TableHead>Tipo</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="w-[100px]">Tentativas</TableHead>
+                              <TableHead>Horário</TableHead>
+                              <TableHead className="text-right">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {execution.logs.map((log) => {
+                              const status = statusMap[log.status as keyof typeof statusMap];
+                              const eventType = eventTypeMap[log.event_type as keyof typeof eventTypeMap];
+                              const EventIcon = eventType?.icon;
+
+                              return (
+                                <TableRow key={log.id}>
+                                  <TableCell className="font-mono text-xs">{log.event_id}</TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      {EventIcon && <EventIcon className="h-4 w-4 text-muted-foreground" />}
+                                      <span className="font-medium">
+                                        {eventType?.label || log.event_type}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <Badge variant={status.variant} className={status.className}>
+                                      {status.label}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>{log.attempts}</TableCell>
+                                  <TableCell className="text-sm">
+                                    {format(new Date(log.created_at), "HH:mm:ss", { locale: ptBR })}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setSelectedLog(log)}
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      Ver JSON
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
                 );
               })}
-            </TableBody>
-          </Table>
-          {!logs?.length && (
-            <div className="text-center py-8 text-muted-foreground">
-              Nenhum log de sincronização encontrado
-            </div>
+            </Accordion>
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Evento</DialogTitle>
+            <DialogDescription>Informações completas do log de sincronização</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] w-full rounded-md border p-4">
+            {selectedLog && (
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Informações Básicas</h4>
+                  <div className="space-y-1 text-sm">
+                    <p><strong>Event ID:</strong> {selectedLog.event_id}</p>
+                    <p><strong>Tipo:</strong> {selectedLog.event_type}</p>
+                    <p><strong>Status:</strong> {selectedLog.status}</p>
+                    <p><strong>Tentativas:</strong> {selectedLog.attempts}</p>
+                    <p><strong>Data/Hora:</strong> {format(new Date(selectedLog.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}</p>
+                  </div>
+                </div>
+                {selectedLog.error_message && (
+                  <div>
+                    <h4 className="font-semibold mb-2 text-destructive">Mensagem de Erro</h4>
+                    <pre className="bg-destructive/10 p-3 rounded text-xs overflow-auto">{selectedLog.error_message}</pre>
+                  </div>
+                )}
+                <div>
+                  <h4 className="font-semibold mb-2">Payload</h4>
+                  <pre className="bg-muted p-3 rounded text-xs overflow-auto">{JSON.stringify(selectedLog.payload, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
+
+function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
+  const executionMap = new Map<string, SyncLog[]>();
+
+  logs.forEach(log => {
+    const timestamp = new Date(log.created_at);
+    const key = format(timestamp, "yyyy-MM-dd HH:mm");
+    
+    if (!executionMap.has(key)) {
+      executionMap.set(key, []);
+    }
+    executionMap.get(key)!.push(log);
+  });
+
+  const executions: SyncExecution[] = [];
+  
+  executionMap.forEach((logs, key) => {
+    const timestamp = new Date(key);
+    const invoiceCount = logs.filter(l => l.event_type === 'invoice_created').length;
+    const paymentCount = logs.filter(l => l.event_type === 'payment_confirmed').length;
+    const successCount = logs.filter(l => l.status === 'success').length;
+    const errorCount = logs.filter(l => l.status === 'error').length;
+
+    executions.push({
+      timestamp,
+      logs: logs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      totalEvents: logs.length,
+      invoiceCount,
+      paymentCount,
+      successCount,
+      errorCount,
+    });
+  });
+
+  return executions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+}
 
 export default AdminSyncLogs;
