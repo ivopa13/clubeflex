@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -258,38 +258,73 @@ const AdminSyncLogs = () => {
 };
 
 function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
-  const executionMap = new Map<string, SyncLog[]>();
+  if (!logs || logs.length === 0) return [];
 
-  logs.forEach(log => {
-    const timestamp = new Date(log.created_at);
-    const key = format(timestamp, "yyyy-MM-dd HH:mm");
-    
-    if (!executionMap.has(key)) {
-      executionMap.set(key, []);
-    }
-    executionMap.get(key)!.push(log);
-  });
+  // Sort logs by creation date (oldest first)
+  const sortedLogs = [...logs].sort((a, b) => 
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
 
   const executions: SyncExecution[] = [];
-  
-  executionMap.forEach((logs, key) => {
-    const timestamp = new Date(key);
-    const invoiceCount = logs.filter(l => l.event_type === 'invoice_created').length;
-    const paymentCount = logs.filter(l => l.event_type === 'payment_confirmed').length;
-    const successCount = logs.filter(l => l.status === 'success').length;
-    const errorCount = logs.filter(l => l.status === 'error').length;
+  let currentExecution: SyncLog[] = [sortedLogs[0]];
+  let lastTimestamp = new Date(sortedLogs[0].created_at);
+
+  // Group logs within 5 minutes of each other into same execution
+  for (let i = 1; i < sortedLogs.length; i++) {
+    const currentTimestamp = new Date(sortedLogs[i].created_at);
+    const minutesDiff = differenceInMinutes(currentTimestamp, lastTimestamp);
+
+    if (minutesDiff <= 5) {
+      // Same execution - within 5 minutes
+      currentExecution.push(sortedLogs[i]);
+    } else {
+      // New execution - more than 5 minutes gap
+      // Save current execution
+      const firstLog = currentExecution[0];
+      const timestamp = new Date(firstLog.created_at);
+      const invoiceCount = currentExecution.filter(l => l.event_type === 'invoice_created').length;
+      const paymentCount = currentExecution.filter(l => l.event_type === 'payment_confirmed').length;
+      const successCount = currentExecution.filter(l => l.status === 'success').length;
+      const errorCount = currentExecution.filter(l => l.status === 'error').length;
+
+      executions.push({
+        timestamp,
+        logs: currentExecution.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+        totalEvents: currentExecution.length,
+        invoiceCount,
+        paymentCount,
+        successCount,
+        errorCount,
+      });
+
+      // Start new execution
+      currentExecution = [sortedLogs[i]];
+    }
+    
+    lastTimestamp = currentTimestamp;
+  }
+
+  // Don't forget the last execution
+  if (currentExecution.length > 0) {
+    const firstLog = currentExecution[0];
+    const timestamp = new Date(firstLog.created_at);
+    const invoiceCount = currentExecution.filter(l => l.event_type === 'invoice_created').length;
+    const paymentCount = currentExecution.filter(l => l.event_type === 'payment_confirmed').length;
+    const successCount = currentExecution.filter(l => l.status === 'success').length;
+    const errorCount = currentExecution.filter(l => l.status === 'error').length;
 
     executions.push({
       timestamp,
-      logs: logs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-      totalEvents: logs.length,
+      logs: currentExecution.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      totalEvents: currentExecution.length,
       invoiceCount,
       paymentCount,
       successCount,
       errorCount,
     });
-  });
+  }
 
+  // Return executions sorted by most recent first
   return executions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 }
 
