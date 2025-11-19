@@ -158,8 +158,11 @@ public class SyncService
             // Buscar pagamentos à vista (MOVENDAREC)
             var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate, syncedPayments);
             
-            // Combinar ambas as listas
-            var allPayments = creditPayments.Concat(cashPayments).ToList();
+            // Buscar cheques compensados (CHEQUES)
+            var clearedChecks = await _databaseService.GetClearedChecksAsync(limit, _syncFromDate, syncedPayments);
+            
+            // Combinar todas as listas
+            var allPayments = creditPayments.Concat(cashPayments).Concat(clearedChecks).ToList();
 
             if (allPayments.Count == 0)
             {
@@ -170,6 +173,7 @@ public class SyncService
             Log.Information($"📊 Total de pagamentos encontrados: {allPayments.Count}");
             Log.Information($"   - Pagamentos a prazo (CONTARECEBERREC): {creditPayments.Count}");
             Log.Information($"   - Pagamentos à vista (MOVENDAREC): {cashPayments.Count}");
+            Log.Information($"   - Cheques compensados (CHEQUES): {clearedChecks.Count}");
 
             int success = 0;
             int errors = 0;
