@@ -587,9 +587,52 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error processing webhook:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    
+    // Extract detailed error information
+    let errorMessage = 'Unknown error';
+    let errorDetails = null;
+    
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
+    // Check for Postgres/Supabase specific errors
+    if (error && typeof error === 'object') {
+      const pgError = error as any;
+      
+      // Enum constraint violation
+      if (pgError.code === '22P02' || errorMessage.includes('invalid input value for enum')) {
+        console.error('Enum validation error - possibly invalid role value:', pgError);
+        errorMessage = `Valor de enum inválido. Detalhes: ${errorMessage}`;
+        errorDetails = {
+          code: pgError.code,
+          hint: pgError.hint,
+          details: pgError.details,
+        };
+      }
+      
+      // Foreign key violation
+      if (pgError.code === '23503') {
+        console.error('Foreign key violation:', pgError);
+        errorMessage = `Referência inválida no banco de dados: ${errorMessage}`;
+      }
+      
+      // Unique constraint violation
+      if (pgError.code === '23505') {
+        console.error('Unique constraint violation:', pgError);
+        errorMessage = `Registro duplicado: ${errorMessage}`;
+      }
+      
+      // Log full error object for debugging
+      console.error('Full error object:', JSON.stringify(pgError, null, 2));
+    }
+    
     return new Response(
-      JSON.stringify({ ok: false, error: message }),
+      JSON.stringify({ 
+        ok: false, 
+        error: errorMessage,
+        ...(errorDetails && { details: errorDetails })
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

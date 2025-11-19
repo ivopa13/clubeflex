@@ -619,6 +619,7 @@ export type Database = {
         | "eletricista"
         | "encanador"
         | "arquiteto"
+        | "profissional"
       webhook_source:
         | "invoice_created"
         | "payment_confirmed"
@@ -775,6 +776,7 @@ export const Constants = {
         "eletricista",
         "encanador",
         "arquiteto",
+        "profissional",
       ],
       webhook_source: [
         "invoice_created",
