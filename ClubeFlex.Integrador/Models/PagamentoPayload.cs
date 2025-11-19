@@ -15,4 +15,7 @@ public class PagamentoPayload
 
     [JsonProperty("paid_at")]
     public string PaidAt { get; set; } = string.Empty;
+
+    [JsonProperty("payment_type")]
+    public string PaymentType { get; set; } = string.Empty;
 }

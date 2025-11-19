@@ -10,6 +10,7 @@ interface PaymentPayload {
   invoice_id_ext: string;
   paid_amount: number;
   paid_at: string;
+  payment_type?: string; // Opcional para retrocompatibilidade
 }
 
 Deno.serve(async (req) => {
@@ -202,6 +203,7 @@ Deno.serve(async (req) => {
         invoice_id: invoice.id,
         paid_amount,
         paid_at,
+        payment_type: payload.payment_type || 'unknown',
       });
 
     if (paymentError) {

@@ -169,6 +169,7 @@ export type Database = {
           paid_amount: number
           paid_at: string
           payment_event_id: string
+          payment_type: string
         }
         Insert: {
           created_at?: string | null
@@ -177,6 +178,7 @@ export type Database = {
           paid_amount: number
           paid_at: string
           payment_event_id: string
+          payment_type?: string
         }
         Update: {
           created_at?: string | null
@@ -185,6 +187,7 @@ export type Database = {
           paid_amount?: number
           paid_at?: string
           payment_event_id?: string
+          payment_type?: string
         }
         Relationships: [
           {

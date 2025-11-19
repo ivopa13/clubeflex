@@ -198,7 +198,8 @@ public class DatabaseService
                     EventId = eventId,
                     InvoiceIdExt = reader["invoice_id"].ToString()!,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
-                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd")
+                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd"),
+                    PaymentType = "credit" // Pagamentos a prazo
                 };
 
                 payments.Add(payload);
@@ -273,12 +274,24 @@ public class DatabaseService
                     continue;
                 }
 
+                // Mapear código de pagamento para tipo
+                var mappedType = paymentCode switch
+                {
+                    "001" => "cash",        // Dinheiro
+                    "003" => "card",        // Cartão
+                    "004" => "card",        // Cartão de Crédito
+                    "005" => "card",        // Cartão de Débito
+                    "010" => "boleto",      // Boleto
+                    _ => "cash"             // Padrão: dinheiro
+                };
+
                 var payload = new PagamentoPayload
                 {
                     EventId = eventId,
                     InvoiceIdExt = invoiceId,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
-                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd")
+                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd"),
+                    PaymentType = mappedType
                 };
 
                 payments.Add(payload);
@@ -351,7 +364,8 @@ public class DatabaseService
                     EventId = eventId,
                     InvoiceIdExt = invoiceId,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
-                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd")
+                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd"),
+                    PaymentType = "check" // Cheques compensados
                 };
 
                 checks.Add(payload);
