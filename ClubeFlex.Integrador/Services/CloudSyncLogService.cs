@@ -26,9 +26,9 @@ public class CloudSyncLogService
         _functionsUrl = $"{cleanBaseUrl}/functions/v1";
         _apiUrl = $"{cleanBaseUrl}/rest/v1";
         
-        Log.Debug($"🔧 CloudSyncLogService configurado:");
-        Log.Debug($"   Functions URL: {_functionsUrl}");
-        Log.Debug($"   API URL: {_apiUrl}");
+        Log.Information($"🔧 CloudSyncLogService configurado:");
+        Log.Information($"   Functions URL: {_functionsUrl}");
+        Log.Information($"   API URL: {_apiUrl}");
         
         _httpClient.DefaultRequestHeaders.Add("apikey", _apiKey);
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
@@ -86,14 +86,14 @@ public class CloudSyncLogService
         {
             var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id";
             
-            Log.Debug($"🔍 Consultando sync_logs: {url}");
+            Log.Information($"🔍 Consultando sync_logs: {url}");
             
             var response = await _httpClient.GetAsync(url);
             
             if (response.IsSuccessStatusCode)
             {
                 var json = await response.Content.ReadAsStringAsync();
-                Log.Debug($"📥 Response JSON: {json.Substring(0, Math.Min(200, json.Length))}...");
+                Log.Information($"📥 Response ({json.Length} chars): {json.Substring(0, Math.Min(300, json.Length))}...");
                 
                 var logs = JsonSerializer.Deserialize<List<SyncLogResponse>>(json);
                 
