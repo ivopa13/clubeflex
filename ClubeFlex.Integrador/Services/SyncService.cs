@@ -90,14 +90,19 @@ public class SyncService
     {
         try
         {
+            // Consultar faturas já sincronizadas
+            var syncedInvoices = await _cloudSyncLogService.GetSuccessfulEventIdsAsync("fatura");
+            
             var limit = _testMode ? _testModeLimit : (int?)null;
-            var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate);
+            var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate, syncedInvoices);
 
             if (invoices.Count == 0)
             {
                 Log.Information("Nenhuma fatura nova para sincronizar");
                 return;
             }
+
+            Log.Information($"Encontradas {invoices.Count} novas faturas para sincronizar");
 
             int success = 0;
             int errors = 0;
@@ -142,13 +147,16 @@ public class SyncService
     {
         try
         {
+            // Consultar pagamentos já sincronizados
+            var syncedPayments = await _cloudSyncLogService.GetSuccessfulEventIdsAsync("pagamento");
+            
             var limit = _testMode ? _testModeLimit : (int?)null;
             
             // Buscar pagamentos a prazo (CONTARECEBERREC)
-            var creditPayments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate);
+            var creditPayments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate, syncedPayments);
             
             // Buscar pagamentos à vista (MOVENDAREC)
-            var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate);
+            var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate, syncedPayments);
             
             // Combinar ambas as listas
             var allPayments = creditPayments.Concat(cashPayments).ToList();
