@@ -153,7 +153,7 @@ public class DatabaseService
     /// <summary>
     /// Busca novos pagamentos confirmados que ainda não foram sincronizados
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null)
+    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
     {
         var payments = new List<PagamentoPayload>();
 
