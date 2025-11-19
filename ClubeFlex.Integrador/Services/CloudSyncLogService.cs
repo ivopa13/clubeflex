@@ -66,4 +66,36 @@ public class CloudSyncLogService
             Log.Error(ex, "Erro ao enviar log para nuvem");
         }
     }
+
+    public async Task<HashSet<string>> GetSuccessfulEventIdsAsync(string eventType)
+    {
+        var eventIds = new HashSet<string>();
+        
+        try
+        {
+            var response = await _httpClient.GetAsync(
+                $"{_baseUrl}/rest/v1/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id"
+            );
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var logs = JsonSerializer.Deserialize<List<SyncLogResponse>>(json);
+                
+                foreach (var log in logs ?? Enumerable.Empty<SyncLogResponse>())
+                {
+                    if (!string.IsNullOrEmpty(log.EventId))
+                        eventIds.Add(log.EventId);
+                }
+                
+                Log.Information($"📋 {eventIds.Count} event_ids já sincronizados ({eventType})");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, $"Não foi possível consultar logs sincronizados ({eventType}). Continuando sem filtro.");
+        }
+        
+        return eventIds;
+    }
 }

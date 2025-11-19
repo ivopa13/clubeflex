@@ -27,7 +27,7 @@ public class DatabaseService
     /// <summary>
     /// Busca novas faturas que ainda não foram sincronizadas com sucesso
     /// </summary>
-    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync(int? limit = null, DateTime? fromDate = null)
+    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
     {
         var invoices = new List<FaturaCriadaPayload>();
 
@@ -68,6 +68,13 @@ public class DatabaseService
             {
                 var invoiceId = reader["invoice_id"].ToString() ?? "";
                 var eventId = $"FAT_{invoiceId}";
+
+                // Pular se já foi sincronizado
+                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
+                {
+                    Log.Debug($"⏭️  Pulando fatura {invoiceId} - já sincronizada");
+                    continue;
+                }
 
                 var orderNumber = reader.IsDBNull(reader.GetOrdinal("order_number")) 
                     ? null 
@@ -179,6 +186,13 @@ public class DatabaseService
                 var paymentId = reader["payment_id"].ToString() ?? "";
                 var eventId = $"PAG_{paymentId}";
 
+                // Pular se já foi sincronizado
+                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
+                {
+                    Log.Debug($"⏭️  Pulando pagamento {paymentId} - já sincronizado");
+                    continue;
+                }
+
                 var payload = new PagamentoPayload
                 {
                     EventId = eventId,
@@ -205,7 +219,7 @@ public class DatabaseService
     /// Busca pagamentos à vista (MOVENDAREC) que foram quitados imediatamente
     /// Exclui: Vale, Carnê, A Prazo, Promissória, Cheque e Boleto
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null)
+    public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
     {
         var payments = new List<PagamentoPayload>();
 
@@ -251,6 +265,13 @@ public class DatabaseService
                 var paymentCode = reader["payment_code"].ToString() ?? "";
                 var eventId = $"PAG_VISTA_{invoiceId}_{paymentCode}";
                 var paymentType = reader["payment_type"].ToString() ?? "";
+
+                // Pular se já foi sincronizado
+                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
+                {
+                    Log.Debug($"⏭️  Pulando pagamento à vista {eventId} - já sincronizado");
+                    continue;
+                }
 
                 var payload = new PagamentoPayload
                 {
