@@ -11,8 +11,8 @@ timeout /t 2 /nobreak >nul
 REM Definir diretório de trabalho como o diretório do script
 cd /d "%~dp0"
 
-REM Executar o integrador
-"%~dp0ClubeFlex.Integrador.exe"
+REM Executar o integrador em modo silencioso (fecha automaticamente)
+"%~dp0ClubeFlex.Integrador.exe" --silent
 
 REM Código de saída
 exit /b %ERRORLEVEL%
