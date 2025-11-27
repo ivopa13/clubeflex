@@ -9,7 +9,7 @@ import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Eye, FileText, DollarSign, CalendarIcon } from "lucide-react";
+import { Eye, FileText, DollarSign, CalendarIcon, RefreshCw } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useState, useMemo } from "react";
 import { Calendar } from "@/components/ui/calendar";
@@ -87,9 +87,10 @@ const AdminSyncLogs = () => {
     setPresetFilter("custom");
   };
 
-  const { data: logs, isLoading } = useQuery({
-    queryKey: ["sync-logs", dateRange.from, dateRange.to],
+  const { data: logs, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["sync-logs", dateRange.from.toISOString(), dateRange.to.toISOString()],
     queryFn: async () => {
+      console.log("Buscando logs de:", dateRange.from.toISOString(), "até:", dateRange.to.toISOString());
       const { data, error } = await supabase
         .from("sync_logs")
         .select("*")
@@ -97,9 +98,11 @@ const AdminSyncLogs = () => {
         .lte("created_at", dateRange.to.toISOString())
         .order("created_at", { ascending: false });
 
+      console.log("Logs encontrados:", data?.length || 0);
       if (error) throw error;
       return data as SyncLog[];
     },
+    staleTime: 0, // Sempre buscar dados frescos
   });
 
   // Group logs by execution (same minute)
@@ -146,6 +149,15 @@ const AdminSyncLogs = () => {
 
         {/* Date Filters */}
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={cn("h-4 w-4 mr-1", isFetching && "animate-spin")} />
+            Atualizar
+          </Button>
           <Button
             variant={presetFilter === "today" ? "default" : "outline"}
             size="sm"
