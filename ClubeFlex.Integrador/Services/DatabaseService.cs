@@ -151,7 +151,31 @@ public class DatabaseService
     }
 
     /// <summary>
+    /// Mapeia código de recebimento (CODREC) para tipo de pagamento
+    /// </summary>
+    private string MapPaymentTypeCode(string? codrec)
+    {
+        return codrec?.Trim() switch
+        {
+            "001" => "cash",           // Dinheiro
+            "002" => "check",          // Cheque
+            "003" => "card",           // Cartão
+            "004" => "credit_card",    // Cartão de Crédito
+            "005" => "debit_card",     // Cartão de Débito
+            "006" => "transfer",       // Depósito/Transferência
+            "007" => "pix",            // PIX
+            "008" => "installment",    // Carnê
+            "009" => "credit",         // A Prazo (carteira)
+            "010" => "boleto",         // Cobrança Bancária/Boleto
+            "011" => "credit_account", // Crédito na Conta
+            "033" => "exchange",       // Permuta
+            _ => "unknown"
+        };
+    }
+
+    /// <summary>
     /// Busca novos pagamentos confirmados que ainda não foram sincronizados
+    /// Inclui o CODREC para identificar o tipo real de pagamento
     /// </summary>
     public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
     {
@@ -165,7 +189,8 @@ public class DatabaseService
                 crr.ID as payment_id,
                 m.CODMOVENDA as invoice_id,
                 crr.VALOR as paid_amount,
-                crr.DATA as paid_at
+                crr.DATA as paid_at,
+                TRIM(crr.CODREC) as payment_type_code
             FROM CONTARECEBERREC crr
             INNER JOIN CONTARECEBER cr ON crr.CODCR = cr.CODCR
             INNER JOIN MOVENDA m ON cr.CODMOVENDA = m.CODMOVENDA
@@ -193,16 +218,21 @@ public class DatabaseService
                     continue;
                 }
 
+                var paymentTypeCode = reader["payment_type_code"]?.ToString();
+                var mappedType = MapPaymentTypeCode(paymentTypeCode);
+
                 var payload = new PagamentoPayload
                 {
                     EventId = eventId,
                     InvoiceIdExt = reader["invoice_id"].ToString()!,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
                     PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd"),
-                    PaymentType = "credit" // Pagamentos a prazo
+                    PaymentType = mappedType
                 };
 
                 payments.Add(payload);
+                
+                Log.Debug($"Pagamento encontrado: {eventId} - Código: {paymentTypeCode} -> Tipo: {mappedType} - Valor: {payload.PaidAmount}");
             }
 
             Log.Information($"Encontrados {payments.Count} novos pagamentos para sincronizar");
@@ -218,7 +248,7 @@ public class DatabaseService
 
     /// <summary>
     /// Busca pagamentos à vista (MOVENDAREC) que foram quitados imediatamente
-    /// Exclui: Vale, Carnê, A Prazo, Promissória, Cheque e Boleto
+    /// Exclui apenas: Carnê, A Prazo (carteira) e Promissória (serão tratados separadamente)
     /// </summary>
     public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
     {
@@ -228,13 +258,11 @@ public class DatabaseService
         var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         // Códigos de recebimento que devem ser EXCLUÍDOS:
-        // 007 = Vale
-        // 008 = Carnê
-        // 009 = A Prazo
-        // 033 = Promissória
-        // 002 = Cheque (deixar para implementação futura)
-        // 010 = Cobrança Bancária/Boleto (deixar para implementação futura)
-        var excludedCodes = "'002', '008', '009', '010', '033'";
+        // 008 = Carnê (tratado em CONTARECEBERREC quando pago)
+        // 009 = A Prazo/Carteira (tratado em CONTARECEBERREC quando pago)
+        // 033 = Promissória (tratado em CONTARECEBERREC quando pago)
+        // 002 = Cheque (tratado em GetClearedChecksAsync)
+        var excludedCodes = "'002', '008', '009', '033'";
 
         var query = $@"
             SELECT FIRST {batchSize}
@@ -265,7 +293,7 @@ public class DatabaseService
                 var invoiceId = reader["invoice_id"].ToString() ?? "";
                 var paymentCode = reader["payment_code"].ToString() ?? "";
                 var eventId = $"PAG_VISTA_{invoiceId}_{paymentCode}";
-                var paymentType = reader["payment_type"].ToString() ?? "";
+                var paymentTypeName = reader["payment_type"].ToString() ?? "";
 
                 // Pular se já foi sincronizado
                 if (syncedEventIds != null && syncedEventIds.Contains(eventId))
@@ -274,16 +302,8 @@ public class DatabaseService
                     continue;
                 }
 
-                // Mapear código de pagamento para tipo
-                var mappedType = paymentCode switch
-                {
-                    "001" => "cash",        // Dinheiro
-                    "003" => "card",        // Cartão
-                    "004" => "card",        // Cartão de Crédito
-                    "005" => "card",        // Cartão de Débito
-                    "010" => "boleto",      // Boleto
-                    _ => "cash"             // Padrão: dinheiro
-                };
+                // Usar o método centralizado de mapeamento
+                var mappedType = MapPaymentTypeCode(paymentCode);
 
                 var payload = new PagamentoPayload
                 {
@@ -296,7 +316,7 @@ public class DatabaseService
 
                 payments.Add(payload);
                 
-                Log.Debug($"Pagamento à vista encontrado: {eventId} - Tipo: {paymentType} (Código: {paymentCode}) - Fatura: {invoiceId} - Valor: {payload.PaidAmount}");
+                Log.Debug($"Pagamento à vista encontrado: {eventId} - Tipo: {paymentTypeName} (Código: {paymentCode} -> {mappedType}) - Fatura: {invoiceId} - Valor: {payload.PaidAmount}");
             }
 
             Log.Information($"Encontrados {payments.Count} novos pagamentos à vista para sincronizar");
