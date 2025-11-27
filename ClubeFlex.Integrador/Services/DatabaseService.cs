@@ -9,6 +9,7 @@
 // Logs de sincronização são enviados para Lovable Cloud via API
 // NUNCA são salvos no banco local do CPlus
 
+using System.Globalization;
 using ClubeFlex.Integrador.Models;
 using FirebirdSql.Data.FirebirdClient;
 using Serilog;
@@ -22,6 +23,70 @@ public class DatabaseService
     public DatabaseService(string connectionString)
     {
         _connectionString = connectionString;
+    }
+
+    /// <summary>
+    /// Converte data do Firebird de forma segura, evitando interpretações incorretas
+    /// </summary>
+    private DateTime? SafeParseDateFromFirebird(object? rawValue, string fieldName, string context)
+    {
+        if (rawValue == null || rawValue == DBNull.Value)
+        {
+            Log.Debug($"[{context}] Campo {fieldName} é nulo");
+            return null;
+        }
+
+        // Se já é DateTime, usa direto
+        if (rawValue is DateTime dt)
+        {
+            Log.Debug($"[{context}] {fieldName} já é DateTime: {dt:yyyy-MM-dd}");
+            return dt;
+        }
+
+        var rawString = rawValue.ToString();
+        Log.Debug($"[{context}] Tentando converter {fieldName}: '{rawString}' (Tipo: {rawValue.GetType().Name})");
+
+        // Tenta vários formatos de parsing
+        string[] formats = {
+            "yyyy-MM-dd",
+            "dd/MM/yyyy",
+            "yyyy-MM-dd HH:mm:ss",
+            "dd/MM/yyyy HH:mm:ss",
+            "MM/dd/yyyy",
+            "MM/dd/yyyy HH:mm:ss"
+        };
+
+        if (DateTime.TryParseExact(rawString, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+        {
+            // Validação de sanidade: ano deve estar entre 2000 e 2100
+            if (parsedDate.Year >= 2000 && parsedDate.Year <= 2100)
+            {
+                Log.Debug($"[{context}] {fieldName} convertido com sucesso: {parsedDate:yyyy-MM-dd}");
+                return parsedDate;
+            }
+            else
+            {
+                Log.Warning($"[{context}] ⚠️ {fieldName} ano inválido após parse: {parsedDate.Year} (valor original: '{rawString}')");
+            }
+        }
+
+        // Fallback: tenta parse padrão
+        if (DateTime.TryParse(rawString, out var fallbackDate))
+        {
+            // Validação de sanidade
+            if (fallbackDate.Year >= 2000 && fallbackDate.Year <= 2100)
+            {
+                Log.Debug($"[{context}] {fieldName} convertido via fallback: {fallbackDate:yyyy-MM-dd}");
+                return fallbackDate;
+            }
+            else
+            {
+                Log.Warning($"[{context}] ⚠️ {fieldName} ano inválido no fallback: {fallbackDate.Year} (valor original: '{rawString}')");
+            }
+        }
+
+        Log.Error($"[{context}] ❌ Não foi possível converter {fieldName}: '{rawString}'");
+        return null;
     }
 
     /// <summary>
@@ -89,13 +154,21 @@ public class DatabaseService
                     ? null 
                     : reader["customer_cnpj"].ToString()?.Trim();
 
+                // Usar conversão segura de data
+                var issuedAt = SafeParseDateFromFirebird(reader["issued_at"], "issued_at", $"Fatura {invoiceId}");
+                if (!issuedAt.HasValue)
+                {
+                    Log.Warning($"⚠️ Fatura {invoiceId} ignorada por data inválida");
+                    continue;
+                }
+
                 var payload = new FaturaCriadaPayload
                 {
                     EventId = eventId,
                     InvoiceIdExt = invoiceId,
                     OrderNumber = orderNumber,
                     TotalAmount = Convert.ToDecimal(reader["total_amount"]),
-                    IssuedAt = Convert.ToDateTime(reader["issued_at"]).ToString("yyyy-MM-dd"),
+                    IssuedAt = issuedAt.Value.ToString("yyyy-MM-dd"),
                     Customer = new CustomerData
                     {
                         IdExt = reader["customer_id"].ToString()!,
@@ -152,14 +225,17 @@ public class DatabaseService
 
     /// <summary>
     /// Mapeia código de recebimento (CODREC) para tipo de pagamento
+    /// IMPORTANTE: Adicione novos códigos conforme descobertos nos logs
     /// </summary>
     private string MapPaymentTypeCode(string? codrec)
     {
-        return codrec?.Trim() switch
+        var trimmedCode = codrec?.Trim();
+        
+        var mappedType = trimmedCode switch
         {
             "001" => "cash",           // Dinheiro
             "002" => "check",          // Cheque
-            "003" => "card",           // Cartão
+            "003" => "card",           // Cartão (genérico)
             "004" => "credit_card",    // Cartão de Crédito
             "005" => "debit_card",     // Cartão de Débito
             "006" => "transfer",       // Depósito/Transferência
@@ -168,9 +244,39 @@ public class DatabaseService
             "009" => "credit",         // A Prazo (carteira)
             "010" => "boleto",         // Cobrança Bancária/Boleto
             "011" => "credit_account", // Crédito na Conta
+            "012" => "financing",      // Financiamento
+            "013" => "voucher",        // Vale/Voucher
+            "014" => "credit_note",    // Nota de Crédito
+            "015" => "barter",         // Escambo
+            "020" => "promissory",     // Promissória
+            "021" => "consignment",    // Consignação
+            "030" => "gift_card",      // Cartão Presente
+            "031" => "store_credit",   // Crédito da Loja
+            "032" => "discount",       // Desconto
             "033" => "exchange",       // Permuta
+            "034" => "compensation",   // Compensação
+            "040" => "bndes",          // BNDES
+            "050" => "fintech",        // Fintech
+            "099" => "other",          // Outros
+            "1" or "01" => "cash",     // Dinheiro (formato alternativo)
+            "2" or "02" => "check",    // Cheque (formato alternativo)
+            "3" or "03" => "card",     // Cartão (formato alternativo)
+            "4" or "04" => "credit_card",
+            "5" or "05" => "debit_card",
+            "6" or "06" => "transfer",
+            "7" or "07" => "pix",
+            "8" or "08" => "installment",
+            "9" or "09" => "credit",
             _ => "unknown"
         };
+
+        // Log para códigos não mapeados (ajuda a descobrir novos códigos)
+        if (mappedType == "unknown" && !string.IsNullOrEmpty(trimmedCode))
+        {
+            Log.Warning($"⚠️ Código de pagamento não mapeado: '{trimmedCode}' - Considere adicionar ao MapPaymentTypeCode()");
+        }
+
+        return mappedType;
     }
 
     /// <summary>
@@ -221,12 +327,20 @@ public class DatabaseService
                 var paymentTypeCode = reader["payment_type_code"]?.ToString();
                 var mappedType = MapPaymentTypeCode(paymentTypeCode);
 
+                // Usar conversão segura de data
+                var paidAt = SafeParseDateFromFirebird(reader["paid_at"], "paid_at", $"Pagamento {paymentId}");
+                if (!paidAt.HasValue)
+                {
+                    Log.Warning($"⚠️ Pagamento {paymentId} ignorado por data inválida");
+                    continue;
+                }
+
                 var payload = new PagamentoPayload
                 {
                     EventId = eventId,
                     InvoiceIdExt = reader["invoice_id"].ToString()!,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
-                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd"),
+                    PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
                     PaymentType = mappedType
                 };
 
@@ -305,12 +419,20 @@ public class DatabaseService
                 // Usar o método centralizado de mapeamento
                 var mappedType = MapPaymentTypeCode(paymentCode);
 
+                // Usar conversão segura de data
+                var paidAt = SafeParseDateFromFirebird(reader["paid_at"], "paid_at", $"PagVista {invoiceId}");
+                if (!paidAt.HasValue)
+                {
+                    Log.Warning($"⚠️ Pagamento à vista {eventId} ignorado por data inválida");
+                    continue;
+                }
+
                 var payload = new PagamentoPayload
                 {
                     EventId = eventId,
                     InvoiceIdExt = invoiceId,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
-                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd"),
+                    PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
                     PaymentType = mappedType
                 };
 
@@ -379,18 +501,29 @@ public class DatabaseService
                     continue;
                 }
 
+                // Usar conversão segura de data - CRÍTICO para cheques
+                var rawDate = reader["paid_at"];
+                Log.Debug($"[Cheque {checkNumber}] Valor bruto DEPOSITO: '{rawDate}' (Tipo: {rawDate?.GetType().Name ?? "null"})");
+                
+                var paidAt = SafeParseDateFromFirebird(rawDate, "DEPOSITO", $"Cheque {checkNumber}");
+                if (!paidAt.HasValue)
+                {
+                    Log.Warning($"⚠️ Cheque {eventId} ignorado por data de depósito inválida (valor bruto: '{rawDate}')");
+                    continue;
+                }
+
                 var payload = new PagamentoPayload
                 {
                     EventId = eventId,
                     InvoiceIdExt = invoiceId,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
-                    PaidAt = Convert.ToDateTime(reader["paid_at"]).ToString("yyyy-MM-dd"),
+                    PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
                     PaymentType = "check" // Cheques compensados
                 };
 
                 checks.Add(payload);
                 
-                Log.Debug($"✅ Cheque compensado: {eventId} - Banco: {bank} - Fatura: {invoiceId} - Valor: {payload.PaidAmount:C}");
+                Log.Debug($"✅ Cheque compensado: {eventId} - Banco: {bank} - Fatura: {invoiceId} - Valor: {payload.PaidAmount:C} - Data: {paidAt.Value:yyyy-MM-dd}");
             }
 
             Log.Information($"Encontrados {checks.Count} cheques compensados para sincronizar");
