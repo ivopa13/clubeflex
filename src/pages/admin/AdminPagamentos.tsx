@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -11,8 +12,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
-import { DollarSign, FileText, Calendar, RefreshCw } from "lucide-react";
+import { DollarSign, FileText, Calendar, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Payment {
@@ -53,6 +55,8 @@ const getPaymentTypeBadge = (type: string) => {
 };
 
 const AdminPagamentos = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  
   const { data: payments, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["admin-payments"],
     queryFn: async () => {
@@ -71,6 +75,18 @@ const AdminPagamentos = () => {
       return data as Payment[];
     },
   });
+
+  const filteredPayments = useMemo(() => {
+    if (!payments || !searchTerm.trim()) return payments;
+    
+    const term = searchTerm.toLowerCase().trim();
+    return payments.filter((payment) => 
+      payment.payment_event_id?.toLowerCase().includes(term) ||
+      payment.invoice?.invoice_id_ext?.toLowerCase().includes(term) ||
+      payment.invoice?.customer?.name?.toLowerCase().includes(term) ||
+      getPaymentTypeBadge(payment.payment_type).label.toLowerCase().includes(term)
+    );
+  }, [payments, searchTerm]);
 
   const totalPaid = payments?.reduce((sum, p) => sum + Number(p.paid_amount), 0) || 0;
 
@@ -114,6 +130,16 @@ const AdminPagamentos = () => {
           <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
           Atualizar
         </Button>
+      </div>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por ID, fatura, cliente ou tipo..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -175,7 +201,7 @@ const AdminPagamentos = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments?.map((payment) => {
+              {filteredPayments?.map((payment) => {
                 const typeBadge = getPaymentTypeBadge(payment.payment_type);
                 
                 return (
@@ -225,10 +251,10 @@ const AdminPagamentos = () => {
                   </TableRow>
                 );
               })}
-              {!payments?.length && (
+              {!filteredPayments?.length && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Nenhum pagamento registrado
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    {searchTerm ? "Nenhum pagamento encontrado" : "Nenhum pagamento registrado"}
                   </TableCell>
                 </TableRow>
               )}
