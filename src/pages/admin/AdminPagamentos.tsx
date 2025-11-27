@@ -39,8 +39,10 @@ const getPaymentTypeBadge = (type: string) => {
     credit: { label: "A Prazo", color: "#18375d" },
     pix: { label: "PIX", color: "#00b4a0" },
     boleto: { label: "Boleto Bancário", color: "#f59e0b" },
-    transfer: { label: "Depósito/Transferência", color: "#3b82f6" },
+    transfer: { label: "TED/Transferência", color: "#3b82f6" },
     installment: { label: "Carnê", color: "#ec4899" },
+    voucher: { label: "Vale", color: "#a855f7" },
+    promissory: { label: "Promissória", color: "#dc2626" },
     credit_account: { label: "Crédito em Conta", color: "#14b8a6" },
     exchange: { label: "Permuta", color: "#a855f7" },
     unknown: { label: "Não identificado", color: "#6b7280" }
