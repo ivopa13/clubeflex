@@ -29,6 +29,7 @@ import AdminClientesPendentes from "./pages/admin/AdminClientesPendentes";
 import AdminEspecificadoresPendentes from "./pages/admin/AdminEspecificadoresPendentes";
 import AdminPerfil from "./pages/admin/AdminPerfil";
 import AdminGerenciarCadastros from "./pages/admin/AdminGerenciarCadastros";
+import AdminVendas from "./pages/admin/AdminVendas";
 
 const queryClient = new QueryClient();
 
@@ -121,6 +122,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminDashboard />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/vendas"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminVendas />
                 </AdminLayout>
               </AuthGuard>
             }
