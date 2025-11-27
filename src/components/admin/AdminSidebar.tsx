@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign, UserX, User, UserCog } from "lucide-react";
+import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign, UserX, User, UserCog, TrendingUp } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -16,6 +16,7 @@ import { toast } from "sonner";
 
 const menuItems = [
   { title: "Dashboard", icon: Home, path: "/admin" },
+  { title: "Vendas", icon: TrendingUp, path: "/admin/vendas" },
   { title: "Perfil", icon: User, path: "/admin/perfil" },
   { title: "Usuários", icon: Users, path: "/admin/usuarios" },
   { title: "Gerenciar Cadastros", icon: UserCog, path: "/admin/gerenciar-cadastros" },
