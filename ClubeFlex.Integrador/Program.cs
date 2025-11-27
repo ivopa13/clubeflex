@@ -8,14 +8,15 @@ class Program
 {
 static async Task<int> Main(string[] args)
     {
-        // Verificar se deve rodar em modo silencioso (sem esperar Enter)
-        bool silentMode = args.Contains("--silent") || args.Contains("-s");
+        // MODO SILENCIOSO É O PADRÃO - fecha automaticamente
+        // Use --interactive ou -i se quiser que espere Enter no final
+        bool interactiveMode = args.Contains("--interactive") || args.Contains("-i");
         
         // PRIMEIRO: Output básico sem depender de nada
         Console.WriteLine("==============================================");
-        Console.WriteLine("       CLUBE FLEX INTEGRADOR v1.1");
+        Console.WriteLine("       CLUBE FLEX INTEGRADOR v1.2");
         Console.WriteLine("==============================================");
-        if (silentMode) Console.WriteLine("       [MODO SILENCIOSO ATIVO]");
+        if (!interactiveMode) Console.WriteLine("       [FECHA AUTOMATICAMENTE]");
         Console.WriteLine($"Data/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         Console.WriteLine($"Diretório atual: {Directory.GetCurrentDirectory()}");
         Console.WriteLine($"appsettings.json existe: {File.Exists("appsettings.json")}");
@@ -103,8 +104,8 @@ static async Task<int> Main(string[] args)
             Console.WriteLine("=== Clube Flex Integrador Finalizado ===");
             try { Log.CloseAndFlush(); } catch { }
             
-            // Só pedir Enter se estiver rodando interativamente E não em modo silencioso
-            if (!silentMode && Environment.UserInteractive && !Console.IsInputRedirected)
+            // Só pedir Enter se passar --interactive explicitamente
+            if (interactiveMode)
             {
                 Console.WriteLine();
                 Console.WriteLine("Pressione ENTER para fechar...");
