@@ -42,6 +42,7 @@ const paymentTypeLabels: Record<string, { label: string; icon: typeof CreditCard
   "promissory": { label: "Promissória", icon: Receipt },
   "credit_account": { label: "Crédito em Conta", icon: Wallet },
   "exchange": { label: "Permuta", icon: Receipt },
+  "pending": { label: "Aguardando Pagamento", icon: Wallet },
   "unknown": { label: "Outros", icon: Wallet },
 };
 
@@ -84,13 +85,23 @@ const AdminVendas = () => {
     setPresetFilter("custom");
   };
 
-  // Fetch invoices data
-  const { data: invoicesData, isLoading: isLoadingInvoices } = useQuery({
+  // Fetch invoices with their payments (for payment type breakdown)
+  const { data: invoicesData, isLoading } = useQuery({
     queryKey: ["sales-invoices", dateRange.from, dateRange.to],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("invoices")
-        .select("id, total_amount, status, created_at")
+        .select(`
+          id, 
+          total_amount, 
+          status, 
+          created_at,
+          payments (
+            id,
+            payment_type,
+            paid_amount
+          )
+        `)
         .gte("created_at", dateRange.from.toISOString())
         .lte("created_at", dateRange.to.toISOString());
       
@@ -99,50 +110,46 @@ const AdminVendas = () => {
     },
   });
 
-  // Fetch payments data
-  const { data: paymentsData, isLoading: isLoadingPayments } = useQuery({
-    queryKey: ["sales-payments", dateRange.from, dateRange.to],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("payments")
-        .select("id, paid_amount, payment_type, paid_at")
-        .gte("paid_at", dateRange.from.toISOString())
-        .lte("paid_at", dateRange.to.toISOString());
-      
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // Calculate metrics
+  // Calculate metrics based on INVOICES (sales), not payments received
   const metrics = useMemo(() => {
     const invoices = invoicesData || [];
-    const payments = paymentsData || [];
 
-    const totalRevenue = payments.reduce((sum, p) => sum + Number(p.paid_amount), 0);
+    // Faturamento Total = soma do total_amount das faturas (vendas)
+    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
     const ticketCount = invoices.length;
     const avgTicket = ticketCount > 0 ? totalRevenue / ticketCount : 0;
 
-    // Group payments by type
-    const paymentsByType = payments.reduce((acc, p) => {
-      const type = p.payment_type || "unknown";
-      if (!acc[type]) {
-        acc[type] = { count: 0, total: 0 };
+    // Tipos de Venda = agrupa pelos tipos de pagamento vinculados às faturas do período
+    const salesByType: Record<string, { count: number; total: number }> = {};
+    
+    invoices.forEach((invoice) => {
+      const payments = invoice.payments || [];
+      
+      if (payments.length === 0) {
+        // Fatura sem pagamento ainda - categorizar como "pending"
+        if (!salesByType["pending"]) {
+          salesByType["pending"] = { count: 0, total: 0 };
+        }
+        salesByType["pending"].count += 1;
+        salesByType["pending"].total += Number(invoice.total_amount);
+      } else {
+        // Usar o tipo do primeiro pagamento como tipo da venda
+        const mainPaymentType = payments[0].payment_type || "unknown";
+        if (!salesByType[mainPaymentType]) {
+          salesByType[mainPaymentType] = { count: 0, total: 0 };
+        }
+        salesByType[mainPaymentType].count += 1;
+        salesByType[mainPaymentType].total += Number(invoice.total_amount);
       }
-      acc[type].count += 1;
-      acc[type].total += Number(p.paid_amount);
-      return acc;
-    }, {} as Record<string, { count: number; total: number }>);
+    });
 
     return {
       totalRevenue,
       ticketCount,
       avgTicket,
-      paymentsByType,
+      salesByType,
     };
-  }, [invoicesData, paymentsData]);
-
-  const isLoading = isLoadingInvoices || isLoadingPayments;
+  }, [invoicesData]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -283,10 +290,10 @@ const AdminVendas = () => {
         </Card>
       </div>
 
-      {/* Payment Types */}
+      {/* Tipos de Venda */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Tipos de Recebimento</CardTitle>
+          <CardTitle className="text-lg">Tipos de Venda</CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -295,13 +302,13 @@ const AdminVendas = () => {
                 <Skeleton key={i} className="h-24 w-full" />
               ))}
             </div>
-          ) : Object.keys(metrics.paymentsByType).length === 0 ? (
+          ) : Object.keys(metrics.salesByType).length === 0 ? (
             <p className="text-muted-foreground text-center py-8">
-              Nenhum pagamento encontrado no período selecionado
+              Nenhuma venda encontrada no período selecionado
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(metrics.paymentsByType).map(([type, data]) => {
+              {Object.entries(metrics.salesByType).map(([type, data]) => {
                 const typeInfo = paymentTypeLabels[type] || paymentTypeLabels["unknown"];
                 const Icon = typeInfo.icon;
                 const percentage = metrics.totalRevenue > 0 
@@ -320,7 +327,7 @@ const AdminVendas = () => {
                       <p className="text-sm font-medium">{typeInfo.label}</p>
                       <p className="text-xl font-bold">{formatCurrency(data.total)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {data.count} transações • {percentage}%
+                        {data.count} vendas • {percentage}%
                       </p>
                     </div>
                   </div>
