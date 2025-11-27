@@ -31,11 +31,18 @@ interface Payment {
 
 const getPaymentTypeBadge = (type: string) => {
   const types: Record<string, { label: string; color: string }> = {
-    check: { label: "Cheque", color: "#ff914d" },
-    credit: { label: "A Prazo", color: "#18375d" },
     cash: { label: "Dinheiro", color: "#10b981" },
+    check: { label: "Cheque", color: "#ff914d" },
     card: { label: "Cartão", color: "#8b5cf6" },
-    boleto: { label: "Boleto", color: "#f59e0b" },
+    credit_card: { label: "Cartão de Crédito", color: "#8b5cf6" },
+    debit_card: { label: "Cartão de Débito", color: "#6366f1" },
+    credit: { label: "A Prazo", color: "#18375d" },
+    pix: { label: "PIX", color: "#00b4a0" },
+    boleto: { label: "Boleto Bancário", color: "#f59e0b" },
+    transfer: { label: "Depósito/Transferência", color: "#3b82f6" },
+    installment: { label: "Carnê", color: "#ec4899" },
+    credit_account: { label: "Crédito em Conta", color: "#14b8a6" },
+    exchange: { label: "Permuta", color: "#a855f7" },
     unknown: { label: "Não identificado", color: "#6b7280" }
   };
   
