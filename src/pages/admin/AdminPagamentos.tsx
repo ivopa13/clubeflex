@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import { DollarSign, FileText, Calendar } from "lucide-react";
+import { DollarSign, FileText, Calendar, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface Payment {
   id: string;
@@ -52,7 +53,7 @@ const getPaymentTypeBadge = (type: string) => {
 };
 
 const AdminPagamentos = () => {
-  const { data: payments, isLoading } = useQuery({
+  const { data: payments, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["admin-payments"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -104,6 +105,15 @@ const AdminPagamentos = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Pagamentos</h1>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? 'animate-spin' : ''}`} />
+          Atualizar
+        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
