@@ -28,12 +28,12 @@ type DateRange = {
 type PresetFilter = "this_month" | "last_month" | "this_year" | "custom";
 
 const paymentTypeLabels: Record<string, { label: string; icon: typeof CreditCard }> = {
-  "dinheiro": { label: "Dinheiro", icon: Banknote },
-  "cartao_credito": { label: "Cartão Crédito", icon: CreditCard },
-  "cartao_debito": { label: "Cartão Débito", icon: CreditCard },
+  "credit": { label: "Cartão de Crédito", icon: CreditCard },
+  "cash": { label: "Dinheiro", icon: Banknote },
+  "debit": { label: "Cartão de Débito", icon: CreditCard },
   "pix": { label: "PIX", icon: Wallet },
   "boleto": { label: "Boleto", icon: Receipt },
-  "transferencia": { label: "Transferência", icon: PiggyBank },
+  "transfer": { label: "Transferência", icon: PiggyBank },
   "unknown": { label: "Outros", icon: Wallet },
 };
 
