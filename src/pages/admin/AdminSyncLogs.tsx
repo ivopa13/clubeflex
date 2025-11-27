@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, differenceInMinutes, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek } from "date-fns";
+import { format, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -409,63 +409,43 @@ const AdminSyncLogs = () => {
 function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
   if (!logs || logs.length === 0) return [];
 
-  // Sort logs by updated_at date (oldest first) to group by execution time
-  const sortedLogs = [...logs].sort((a, b) => 
-    new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
-  );
+  // Group logs by their updated_at timestamp rounded to the nearest minute
+  // This creates groups of logs that were processed in the same batch
+  const executionMap = new Map<string, SyncLog[]>();
 
-  const executions: SyncExecution[] = [];
-  let currentExecution: SyncLog[] = [sortedLogs[0]];
-  let lastTimestamp = new Date(sortedLogs[0].updated_at);
+  for (const log of logs) {
+    // Round to the nearest minute to group logs from same execution batch
+    const date = new Date(log.updated_at);
+    const roundedTime = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      date.getHours(),
+      date.getMinutes(),
+      0,
+      0
+    ).toISOString();
 
-  // Group logs within 5 minutes of each other into same execution
-  for (let i = 1; i < sortedLogs.length; i++) {
-    const currentTimestamp = new Date(sortedLogs[i].updated_at);
-    const minutesDiff = differenceInMinutes(currentTimestamp, lastTimestamp);
-
-    if (minutesDiff <= 5) {
-      // Same execution - within 5 minutes
-      currentExecution.push(sortedLogs[i]);
-    } else {
-      // New execution - more than 5 minutes gap
-      // Save current execution
-      const firstLog = currentExecution[0];
-      const timestamp = new Date(firstLog.updated_at);
-      const invoiceCount = currentExecution.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
-      const paymentCount = currentExecution.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
-      const successCount = currentExecution.filter(l => l.status === 'success').length;
-      const errorCount = currentExecution.filter(l => l.status === 'error').length;
-
-      executions.push({
-        timestamp,
-        logs: currentExecution.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
-        totalEvents: currentExecution.length,
-        invoiceCount,
-        paymentCount,
-        successCount,
-        errorCount,
-      });
-
-      // Start new execution
-      currentExecution = [sortedLogs[i]];
+    if (!executionMap.has(roundedTime)) {
+      executionMap.set(roundedTime, []);
     }
-    
-    lastTimestamp = currentTimestamp;
+    executionMap.get(roundedTime)!.push(log);
   }
 
-  // Don't forget the last execution
-  if (currentExecution.length > 0) {
-    const firstLog = currentExecution[0];
-    const timestamp = new Date(firstLog.updated_at);
-    const invoiceCount = currentExecution.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
-    const paymentCount = currentExecution.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
-    const successCount = currentExecution.filter(l => l.status === 'success').length;
-    const errorCount = currentExecution.filter(l => l.status === 'error').length;
+  // Convert map to array of executions
+  const executions: SyncExecution[] = [];
+
+  for (const [timestampStr, executionLogs] of executionMap) {
+    const timestamp = new Date(timestampStr);
+    const invoiceCount = executionLogs.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
+    const paymentCount = executionLogs.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
+    const successCount = executionLogs.filter(l => l.status === 'success').length;
+    const errorCount = executionLogs.filter(l => l.status === 'error').length;
 
     executions.push({
       timestamp,
-      logs: currentExecution.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
-      totalEvents: currentExecution.length,
+      logs: executionLogs.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
+      totalEvents: executionLogs.length,
       invoiceCount,
       paymentCount,
       successCount,
