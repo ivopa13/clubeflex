@@ -4,14 +4,17 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format, differenceInMinutes } from "date-fns";
+import { format, differenceInMinutes, startOfDay, endOfDay, subDays, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Eye, FileText, DollarSign } from "lucide-react";
+import { Eye, FileText, DollarSign, CalendarIcon } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface SyncLog {
   id: string;
@@ -34,17 +37,65 @@ interface SyncExecution {
   errorCount: number;
 }
 
+type DateRange = {
+  from: Date;
+  to: Date;
+};
+
+type PresetFilter = "today" | "yesterday" | "this_week" | "custom";
+
 const AdminSyncLogs = () => {
   const [selectedLog, setSelectedLog] = useState<SyncLog | null>(null);
+  const today = new Date();
+
+  const [presetFilter, setPresetFilter] = useState<PresetFilter>("today");
+  const [dateRange, setDateRange] = useState<DateRange>({
+    from: startOfDay(today),
+    to: endOfDay(today),
+  });
+  const [tempDateRange, setTempDateRange] = useState<DateRange>(dateRange);
+
+  const handlePresetChange = (preset: PresetFilter) => {
+    setPresetFilter(preset);
+    
+    let newRange: DateRange;
+    
+    switch (preset) {
+      case "today":
+        newRange = { from: startOfDay(today), to: endOfDay(today) };
+        break;
+      case "yesterday":
+        const yesterday = subDays(today, 1);
+        newRange = { from: startOfDay(yesterday), to: endOfDay(yesterday) };
+        break;
+      case "this_week":
+        newRange = { from: startOfWeek(today, { weekStartsOn: 0 }), to: endOfWeek(today, { weekStartsOn: 0 }) };
+        break;
+      default:
+        return;
+    }
+    
+    setDateRange(newRange);
+    setTempDateRange(newRange);
+  };
+
+  const handleCustomDateApply = () => {
+    setDateRange({
+      from: startOfDay(tempDateRange.from),
+      to: endOfDay(tempDateRange.to),
+    });
+    setPresetFilter("custom");
+  };
 
   const { data: logs, isLoading } = useQuery({
-    queryKey: ["sync-logs"],
+    queryKey: ["sync-logs", dateRange.from, dateRange.to],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("sync_logs")
         .select("*")
-        .order("created_at", { ascending: false })
-        .limit(200);
+        .gte("created_at", dateRange.from.toISOString())
+        .lte("created_at", dateRange.to.toISOString())
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data as SyncLog[];
@@ -52,7 +103,9 @@ const AdminSyncLogs = () => {
   });
 
   // Group logs by execution (same minute)
-  const executions: SyncExecution[] = logs ? groupLogsByExecution(logs) : [];
+  const executions: SyncExecution[] = useMemo(() => {
+    return logs ? groupLogsByExecution(logs) : [];
+  }, [logs]);
 
   if (isLoading) {
     return (
@@ -83,10 +136,91 @@ const AdminSyncLogs = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Logs de Integração</h1>
-        <p className="text-muted-foreground mt-2">Histórico de execuções do integrador Windows</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Logs de Integração</h1>
+          <p className="text-muted-foreground mt-2">Histórico de execuções do integrador Windows</p>
+        </div>
+
+        {/* Date Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={presetFilter === "today" ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePresetChange("today")}
+          >
+            Hoje
+          </Button>
+          <Button
+            variant={presetFilter === "yesterday" ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePresetChange("yesterday")}
+          >
+            Ontem
+          </Button>
+          <Button
+            variant={presetFilter === "this_week" ? "default" : "outline"}
+            size="sm"
+            onClick={() => handlePresetChange("this_week")}
+          >
+            Esta Semana
+          </Button>
+          
+          {/* Custom Date Range Picker */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={presetFilter === "custom" ? "default" : "outline"}
+                size="sm"
+                className="min-w-[180px] justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {presetFilter === "custom" ? (
+                  <>
+                    {format(dateRange.from, "dd/MM/yy", { locale: ptBR })} - {format(dateRange.to, "dd/MM/yy", { locale: ptBR })}
+                  </>
+                ) : (
+                  "Personalizado"
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-4" align="end">
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-medium mb-2">De:</p>
+                    <Calendar
+                      mode="single"
+                      selected={tempDateRange.from}
+                      onSelect={(date) => date && setTempDateRange(prev => ({ ...prev, from: date }))}
+                      locale={ptBR}
+                      className={cn("p-3 pointer-events-auto border rounded-md")}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium mb-2">Até:</p>
+                    <Calendar
+                      mode="single"
+                      selected={tempDateRange.to}
+                      onSelect={(date) => date && setTempDateRange(prev => ({ ...prev, to: date }))}
+                      locale={ptBR}
+                      className={cn("p-3 pointer-events-auto border rounded-md")}
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleCustomDateApply} className="w-full">
+                  Aplicar
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
+
+      {/* Period Display */}
+      <p className="text-sm text-muted-foreground">
+        Exibindo logs de {format(dateRange.from, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })} até {format(dateRange.to, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+      </p>
 
       <Card>
         <CardHeader>
@@ -94,13 +228,13 @@ const AdminSyncLogs = () => {
           <CardDescription>
             {executions.length > 0 
               ? `${executions.length} execuções encontradas`
-              : "Nenhuma execução registrada"}
+              : "Nenhuma execução registrada no período"}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {!executions || executions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>Nenhum log de sincronização encontrado.</p>
+              <p>Nenhum log de sincronização encontrado no período selecionado.</p>
             </div>
           ) : (
             <Accordion type="single" collapsible className="space-y-4">
