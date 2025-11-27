@@ -18,8 +18,20 @@ public class CloudSyncLogService
         _httpClient = new HttpClient();
         
         var apiConfig = configuration.GetSection("ClubeFlexApi");
-        var baseUrl = apiConfig["BaseUrl"] ?? throw new Exception("BaseUrl não configurado");
-        _apiKey = apiConfig["ApiKey"] ?? throw new Exception("ApiKey não configurado");
+        var baseUrl = apiConfig["BaseUrl"];
+        _apiKey = apiConfig["ApiKey"];
+        
+        if (string.IsNullOrEmpty(baseUrl))
+        {
+            Log.Error("❌ BaseUrl não configurado no appsettings.json");
+            throw new InvalidOperationException("BaseUrl não configurado no appsettings.json. Verifique a seção ClubeFlexApi.");
+        }
+        
+        if (string.IsNullOrEmpty(_apiKey))
+        {
+            Log.Error("❌ ApiKey não configurada no appsettings.json");
+            throw new InvalidOperationException("ApiKey não configurada no appsettings.json. Verifique a seção ClubeFlexApi.");
+        }
         
         // Separar URLs para Edge Functions e PostgREST
         var cleanBaseUrl = baseUrl.Replace("/rest/v1", "").Replace("/functions/v1", "");
@@ -32,7 +44,6 @@ public class CloudSyncLogService
         
         _httpClient.DefaultRequestHeaders.Add("apikey", _apiKey);
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
-    }
 
     public async Task SaveSyncLogAsync(SyncLog log)
     {
