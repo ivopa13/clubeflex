@@ -23,6 +23,7 @@ interface SyncLog {
   status: string;
   attempts: number;
   created_at: string;
+  updated_at: string;
   payload: any;
   error_message: string | null;
 }
@@ -94,9 +95,9 @@ const AdminSyncLogs = () => {
       const { data, error } = await supabase
         .from("sync_logs")
         .select("*")
-        .gte("created_at", dateRange.from.toISOString())
-        .lte("created_at", dateRange.to.toISOString())
-        .order("created_at", { ascending: false });
+        .gte("updated_at", dateRange.from.toISOString())
+        .lte("updated_at", dateRange.to.toISOString())
+        .order("updated_at", { ascending: false });
 
       console.log("Logs encontrados:", data?.length || 0);
       if (error) throw error;
@@ -408,18 +409,18 @@ const AdminSyncLogs = () => {
 function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
   if (!logs || logs.length === 0) return [];
 
-  // Sort logs by creation date (oldest first)
+  // Sort logs by updated_at date (oldest first) to group by execution time
   const sortedLogs = [...logs].sort((a, b) => 
-    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()
   );
 
   const executions: SyncExecution[] = [];
   let currentExecution: SyncLog[] = [sortedLogs[0]];
-  let lastTimestamp = new Date(sortedLogs[0].created_at);
+  let lastTimestamp = new Date(sortedLogs[0].updated_at);
 
   // Group logs within 5 minutes of each other into same execution
   for (let i = 1; i < sortedLogs.length; i++) {
-    const currentTimestamp = new Date(sortedLogs[i].created_at);
+    const currentTimestamp = new Date(sortedLogs[i].updated_at);
     const minutesDiff = differenceInMinutes(currentTimestamp, lastTimestamp);
 
     if (minutesDiff <= 5) {
@@ -429,7 +430,7 @@ function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
       // New execution - more than 5 minutes gap
       // Save current execution
       const firstLog = currentExecution[0];
-      const timestamp = new Date(firstLog.created_at);
+      const timestamp = new Date(firstLog.updated_at);
       const invoiceCount = currentExecution.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
       const paymentCount = currentExecution.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
       const successCount = currentExecution.filter(l => l.status === 'success').length;
@@ -437,7 +438,7 @@ function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
 
       executions.push({
         timestamp,
-        logs: currentExecution.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+        logs: currentExecution.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
         totalEvents: currentExecution.length,
         invoiceCount,
         paymentCount,
@@ -455,7 +456,7 @@ function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
   // Don't forget the last execution
   if (currentExecution.length > 0) {
     const firstLog = currentExecution[0];
-    const timestamp = new Date(firstLog.created_at);
+    const timestamp = new Date(firstLog.updated_at);
     const invoiceCount = currentExecution.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
     const paymentCount = currentExecution.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
     const successCount = currentExecution.filter(l => l.status === 'success').length;
@@ -463,7 +464,7 @@ function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
 
     executions.push({
       timestamp,
-      logs: currentExecution.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+      logs: currentExecution.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()),
       totalEvents: currentExecution.length,
       invoiceCount,
       paymentCount,
