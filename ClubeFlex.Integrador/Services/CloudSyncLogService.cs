@@ -44,6 +44,7 @@ public class CloudSyncLogService
         
         _httpClient.DefaultRequestHeaders.Add("apikey", _apiKey);
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
+    }
 
     public async Task SaveSyncLogAsync(SyncLog log)
     {
