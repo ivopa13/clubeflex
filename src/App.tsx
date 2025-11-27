@@ -30,6 +30,7 @@ import AdminEspecificadoresPendentes from "./pages/admin/AdminEspecificadoresPen
 import AdminPerfil from "./pages/admin/AdminPerfil";
 import AdminGerenciarCadastros from "./pages/admin/AdminGerenciarCadastros";
 import AdminVendas from "./pages/admin/AdminVendas";
+import AdminChequesEBoletos from "./pages/admin/AdminChequesEBoletos";
 
 const queryClient = new QueryClient();
 
@@ -192,6 +193,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminPagamentos />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/cheques-boletos"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminChequesEBoletos />
                 </AdminLayout>
               </AuthGuard>
             }
