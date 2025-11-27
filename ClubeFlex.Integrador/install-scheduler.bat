@@ -7,10 +7,11 @@ echo Clube Flex - Instalador de Tarefa Agendada
 echo ====================================
 echo.
 
-REM Definir caminho do executável (AJUSTE conforme sua instalação)
+REM Definir caminho do script wrapper (mata processos anteriores antes de executar)
+set SCRIPT_PATH=%~dp0run-sync.bat
 set EXE_PATH=%~dp0ClubeFlex.Integrador.exe
 
-REM Verificar se o executável existe
+REM Verificar se os arquivos existem
 if not exist "%EXE_PATH%" (
     echo ERRO: Executavel nao encontrado em: %EXE_PATH%
     echo Por favor, compile o projeto antes de executar este script
@@ -18,7 +19,15 @@ if not exist "%EXE_PATH%" (
     exit /b 1
 )
 
-echo Executavel encontrado: %EXE_PATH%
+if not exist "%SCRIPT_PATH%" (
+    echo ERRO: Script run-sync.bat nao encontrado em: %SCRIPT_PATH%
+    pause
+    exit /b 1
+)
+
+echo Arquivos encontrados:
+echo - Executavel: %EXE_PATH%
+echo - Script wrapper: %SCRIPT_PATH%
 echo.
 
 REM Perguntar intervalo de sincronização
@@ -29,14 +38,14 @@ echo.
 echo Criando tarefa agendada...
 echo - Nome: ClubeFlexSync
 echo - Intervalo: A cada %INTERVALO% minutos
-echo - Caminho: %EXE_PATH%
+echo - Script: %SCRIPT_PATH% (mata processos travados antes de executar)
 echo.
 
 REM Remover tarefa existente (se houver)
 schtasks /Delete /TN "ClubeFlexSync" /F >nul 2>&1
 
-REM Criar nova tarefa
-schtasks /Create /TN "ClubeFlexSync" /TR "\"%EXE_PATH%\"" /SC MINUTE /MO %INTERVALO% /RL HIGHEST /F
+REM Criar nova tarefa usando o script wrapper
+schtasks /Create /TN "ClubeFlexSync" /TR "\"%SCRIPT_PATH%\"" /SC MINUTE /MO %INTERVALO% /RL HIGHEST /F
 
 if %ERRORLEVEL% equ 0 (
     echo.
