@@ -1,16 +1,18 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowUpDown, Search } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const AdminFaturas = () => {
   const [ascending, setAscending] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const { data: invoices, isLoading } = useQuery({
     queryKey: ["admin-invoices", ascending],
@@ -28,6 +30,18 @@ const AdminFaturas = () => {
       return data;
     },
   });
+
+  const filteredInvoices = useMemo(() => {
+    if (!invoices || !searchTerm.trim()) return invoices;
+    
+    const term = searchTerm.toLowerCase().trim();
+    return invoices.filter((invoice: any) => 
+      invoice.invoice_id_ext?.toLowerCase().includes(term) ||
+      invoice.order_number?.toLowerCase().includes(term) ||
+      invoice.customer?.name?.toLowerCase().includes(term) ||
+      invoice.specifier?.name?.toLowerCase().includes(term)
+    );
+  }, [invoices, searchTerm]);
 
   const getStatusLabel = (status: string, releasedCustomer: number, releasedSpecifier: number) => {
     const totalReleased = Number(releasedCustomer) + Number(releasedSpecifier);
@@ -50,6 +64,16 @@ const AdminFaturas = () => {
           <ArrowUpDown className="h-4 w-4" />
           {ascending ? "Crescente" : "Decrescente"}
         </Button>
+      </div>
+
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por código, pedido, cliente ou especificador..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
       <Card>
@@ -75,7 +99,7 @@ const AdminFaturas = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {invoices?.map((invoice: any) => {
+                {filteredInvoices?.map((invoice: any) => {
                   const status = getStatusLabel(
                     invoice.status,
                     invoice.released_points_customer,
