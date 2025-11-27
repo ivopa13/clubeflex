@@ -225,7 +225,7 @@ public class DatabaseService
 
     /// <summary>
     /// Mapeia código de recebimento (CODREC) para tipo de pagamento
-    /// IMPORTANTE: Adicione novos códigos conforme descobertos nos logs
+    /// Baseado na tabela RECEBIMENTO do CPlus - mapeado em 27/11/2025
     /// </summary>
     private string MapPaymentTypeCode(string? codrec)
     {
@@ -233,40 +233,57 @@ public class DatabaseService
         
         var mappedType = trimmedCode switch
         {
-            "001" => "cash",           // Dinheiro
-            "002" => "check",          // Cheque
-            "003" => "card",           // Cartão (genérico)
-            "004" => "credit_card",    // Cartão de Crédito
-            "005" => "debit_card",     // Cartão de Débito
-            "006" => "transfer",       // Depósito/Transferência
-            "007" => "pix",            // PIX
-            "008" => "installment",    // Carnê
-            "009" => "credit",         // A Prazo (carteira)
-            "010" => "boleto",         // Cobrança Bancária/Boleto
-            "011" => "credit_account", // Crédito na Conta
-            "012" => "financing",      // Financiamento
-            "013" => "voucher",        // Vale/Voucher
-            "014" => "credit_note",    // Nota de Crédito
-            "015" => "barter",         // Escambo
-            "020" => "promissory",     // Promissória
-            "021" => "consignment",    // Consignação
-            "030" => "gift_card",      // Cartão Presente
-            "031" => "store_credit",   // Crédito da Loja
-            "032" => "discount",       // Desconto
-            "033" => "exchange",       // Permuta
-            "034" => "compensation",   // Compensação
-            "040" => "bndes",          // BNDES
-            "050" => "fintech",        // Fintech
-            "099" => "other",          // Outros
-            "1" or "01" => "cash",     // Dinheiro (formato alternativo)
-            "2" or "02" => "check",    // Cheque (formato alternativo)
-            "3" or "03" => "card",     // Cartão (formato alternativo)
-            "4" or "04" => "credit_card",
-            "5" or "05" => "debit_card",
-            "6" or "06" => "transfer",
-            "7" or "07" => "pix",
+            // Formas de pagamento básicas
+            "001" => "cash",              // Dinheiro
+            "002" => "check",             // Cheque
+            "007" => "voucher",           // Vale
+            "008" => "installment",       // Carnê
+            "009" => "credit",            // A Prazo (carteira)
+            "010" => "boleto",            // Cobrança Bancária
+            "025" => "pix",               // PIX
+            "033" => "promissory",        // Promissória
+            "039" => "transfer",          // TED
+            
+            // Cartões de Crédito - Cielo
+            "003" => "credit_card",       // Cartão Visa
+            "004" => "credit_card",       // Cartão MasterCard
+            "005" => "credit_card",       // Cartão Amex
+            "006" => "credit_card",       // Cartão Hipercard
+            "011" => "credit_card",       // CARTAO DE CREDITO CIELO
+            
+            // Cartões de Débito - Cielo
+            "013" => "debit_card",        // CARTAO DE DEBITO CIELO
+            
+            // Cartões de Crédito - Getnet
+            "015" => "credit_card",       // CARTAO DE CREDITO GETNET
+            
+            // Cartões de Débito - Getnet
+            "017" => "debit_card",        // CARTAO DE DEBITO GETNET
+            
+            // Cartões de Crédito - Stone
+            "019" => "credit_card",       // CARTÃO STONE VISA/MASTERCARD CREDITO
+            "022" => "credit_card",       // CARTÃO STONE ELO CREDITO
+            "024" => "credit_card",       // CARTÃO STONE HIPERCARD/AMEX
+            
+            // Cartões de Débito - Stone
+            "021" => "debit_card",        // CARTÃO STONE VISA/MASTERCARD DEBITO
+            "023" => "debit_card",        // CARTÃO STONE ELO DEBITO
+            
+            // Cartões de Crédito - Caixa
+            "029" => "credit_card",       // CARTÃO CAIXA VISA/MASTERCARD CREDITO
+            "030" => "credit_card",       // CARTÃO CAIXA HIPERCARD/ELO/AMEX CREDITO
+            
+            // Cartões de Débito - Caixa
+            "031" => "debit_card",        // CARTÃO CAIXA VISA/MASTERCARD DEBITO
+            "032" => "debit_card",        // CARTÃO CAIXA ELO DEBITO
+            
+            // Formatos alternativos (sem zero à esquerda)
+            "1" or "01" => "cash",
+            "2" or "02" => "check",
+            "7" or "07" => "voucher",
             "8" or "08" => "installment",
             "9" or "09" => "credit",
+            
             _ => "unknown"
         };
 
