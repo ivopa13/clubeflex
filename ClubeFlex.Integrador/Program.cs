@@ -99,9 +99,13 @@ static async Task<int> Main(string[] args)
             Console.WriteLine("=== Clube Flex Integrador Finalizado ===");
             try { Log.CloseAndFlush(); } catch { }
             
-            Console.WriteLine();
-            Console.WriteLine("Pressione ENTER para fechar...");
-            Console.ReadLine();
+            // Só pedir Enter se estiver rodando interativamente (não pelo Agendador de Tarefas)
+            if (Environment.UserInteractive && !Console.IsInputRedirected)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Pressione ENTER para fechar...");
+                Console.ReadLine();
+            }
         }
     }
 }
