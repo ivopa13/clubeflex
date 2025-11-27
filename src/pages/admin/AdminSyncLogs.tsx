@@ -130,6 +130,8 @@ const AdminSyncLogs = () => {
   };
 
   const eventTypeMap = {
+    fatura: { label: "Fatura", icon: FileText },
+    pagamento: { label: "Pagamento", icon: DollarSign },
     invoice_created: { label: "Fatura", icon: FileText },
     payment_confirmed: { label: "Pagamento", icon: DollarSign },
   };
@@ -416,8 +418,8 @@ function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
       // Save current execution
       const firstLog = currentExecution[0];
       const timestamp = new Date(firstLog.created_at);
-      const invoiceCount = currentExecution.filter(l => l.event_type === 'invoice_created').length;
-      const paymentCount = currentExecution.filter(l => l.event_type === 'payment_confirmed').length;
+      const invoiceCount = currentExecution.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
+      const paymentCount = currentExecution.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
       const successCount = currentExecution.filter(l => l.status === 'success').length;
       const errorCount = currentExecution.filter(l => l.status === 'error').length;
 
@@ -442,8 +444,8 @@ function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
   if (currentExecution.length > 0) {
     const firstLog = currentExecution[0];
     const timestamp = new Date(firstLog.created_at);
-    const invoiceCount = currentExecution.filter(l => l.event_type === 'invoice_created').length;
-    const paymentCount = currentExecution.filter(l => l.event_type === 'payment_confirmed').length;
+    const invoiceCount = currentExecution.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
+    const paymentCount = currentExecution.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
     const successCount = currentExecution.filter(l => l.status === 'success').length;
     const errorCount = currentExecution.filter(l => l.status === 'error').length;
 
