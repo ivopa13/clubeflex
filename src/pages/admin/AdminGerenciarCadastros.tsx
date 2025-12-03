@@ -9,9 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { Edit, Loader2, Search } from "lucide-react";
 
 interface Customer {
@@ -48,6 +47,8 @@ type EditData = {
 const AdminGerenciarCadastros = () => {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [linkedFilter, setLinkedFilter] = useState<string>("all");
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
     type: "customer" | "specifier" | null;
@@ -148,20 +149,35 @@ const AdminGerenciarCadastros = () => {
     return doc;
   };
 
-  const filterBySearch = <T extends Customer | Specifier>(items: T[] | undefined): T[] => {
+  const filterItems = <T extends Customer | Specifier>(items: T[] | undefined): T[] => {
     if (!items) return [];
-    if (!searchTerm.trim()) return items;
     
-    const term = searchTerm.toLowerCase().replace(/\D/g, "") || searchTerm.toLowerCase();
-    return items.filter(item => 
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.doc.replace(/\D/g, "").includes(term) ||
-      (item.email && item.email.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    return items.filter(item => {
+      // Filtro de busca por texto
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase().replace(/\D/g, "") || searchTerm.toLowerCase();
+        const matchesSearch = 
+          item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.doc.replace(/\D/g, "").includes(term) ||
+          (item.email && item.email.toLowerCase().includes(searchTerm.toLowerCase()));
+        if (!matchesSearch) return false;
+      }
+
+      // Filtro de status
+      if (statusFilter !== "all" && item.status !== statusFilter) {
+        return false;
+      }
+
+      // Filtro de vinculado
+      if (linkedFilter === "yes" && !item.user_id) return false;
+      if (linkedFilter === "no" && item.user_id) return false;
+
+      return true;
+    });
   };
 
-  const filteredCustomers = filterBySearch(customers);
-  const filteredSpecifiers = filterBySearch(specifiers);
+  const filteredCustomers = filterItems(customers);
+  const filteredSpecifiers = filterItems(specifiers);
 
   return (
     <div className="space-y-6">
@@ -172,14 +188,38 @@ const AdminGerenciarCadastros = () => {
         </p>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome, CPF/CNPJ ou email..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      <div className="flex flex-wrap gap-4">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, CPF/CNPJ ou email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos Status</SelectItem>
+            <SelectItem value="active">Ativo</SelectItem>
+            <SelectItem value="inactive">Inativo</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={linkedFilter} onValueChange={setLinkedFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Vinculado" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="yes">Vinculado</SelectItem>
+            <SelectItem value="no">Não Vinculado</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Tabs defaultValue="customers" className="space-y-4">
