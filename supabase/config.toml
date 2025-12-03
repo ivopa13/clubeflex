@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.link-user-to-actor]
 verify_jwt = true
+
+[functions.create-user-account]
+verify_jwt = true
