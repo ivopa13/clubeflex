@@ -144,6 +144,64 @@ public class ClubeFlexApiService
     }
 
     /// <summary>
+    /// Atualiza tipos de movimento das faturas em batch
+    /// </summary>
+    public async Task<ApiResponse> UpdateInvoiceTypesAsync(List<(string InvoiceIdExt, string MovementType)> invoiceTypes)
+    {
+        try
+        {
+            var url = $"{_baseUrl}/update-invoice-types";
+            
+            var updates = invoiceTypes.Select(i => new 
+            { 
+                invoice_id_ext = i.InvoiceIdExt, 
+                movement_type = i.MovementType 
+            }).ToList();
+            
+            var payload = new { updates };
+            var json = JsonConvert.SerializeObject(payload, Formatting.None);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            Log.Information($"Enviando {invoiceTypes.Count} atualizações de tipo de movimento...");
+
+            var response = await _httpClient.PostAsync(url, content);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                var result = JsonConvert.DeserializeObject<dynamic>(responseBody);
+                var successCount = result?.successCount ?? 0;
+                var errorCount = result?.errorCount ?? 0;
+                
+                Log.Information($"✓ Atualização concluída: {successCount} sucesso, {errorCount} erros");
+                return new ApiResponse 
+                { 
+                    Success = true, 
+                    Message = $"{successCount} atualizadas, {errorCount} erros"
+                };
+            }
+            else
+            {
+                Log.Error($"✗ Erro ao atualizar tipos: {response.StatusCode} - {responseBody}");
+                return new ApiResponse 
+                { 
+                    Success = false, 
+                    ErrorMessage = responseBody 
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Exceção ao atualizar tipos de movimento");
+            return new ApiResponse 
+            { 
+                Success = false, 
+                ErrorMessage = ex.Message 
+            };
+        }
+    }
+
+    /// <summary>
     /// Testa conectividade com a API do Clube Flex
     /// </summary>
     public async Task<bool> TestConnectionAsync()

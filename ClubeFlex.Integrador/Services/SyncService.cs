@@ -84,6 +84,51 @@ public class SyncService
     }
 
     /// <summary>
+    /// Atualiza tipos de movimento das faturas existentes
+    /// </summary>
+    public async Task UpdateInvoiceTypesAsync()
+    {
+        Log.Information("=== Atualizando Tipos de Movimento das Faturas ===");
+
+        try
+        {
+            var dbOk = await _databaseService.TestConnectionAsync();
+            var apiOk = await _apiService.TestConnectionAsync();
+
+            if (!dbOk || !apiOk)
+            {
+                Log.Fatal("Falha nos testes de conectividade. Abortando atualização.");
+                return;
+            }
+
+            var invoiceTypes = await _databaseService.GetAllInvoiceTypesAsync();
+
+            if (invoiceTypes.Count == 0)
+            {
+                Log.Information("Nenhuma fatura encontrada para atualizar");
+                return;
+            }
+
+            Log.Information($"Encontradas {invoiceTypes.Count} faturas para classificar");
+
+            var result = await _apiService.UpdateInvoiceTypesAsync(invoiceTypes);
+
+            if (result.Success)
+            {
+                Log.Information($"✅ Atualização concluída: {result.Message}");
+            }
+            else
+            {
+                Log.Error($"❌ Erro na atualização: {result.ErrorMessage}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro ao atualizar tipos de movimento");
+        }
+    }
+
+    /// <summary>
     /// Sincroniza faturas criadas
     /// </summary>
     private async Task SyncInvoicesAsync()

@@ -572,6 +572,61 @@ public class DatabaseService
     }
 
     /// <summary>
+    /// Busca todas as faturas com seus tipos de movimento para atualização em batch
+    /// Considera apenas operações 007, 018 (produto) e 064 (serviço)
+    /// </summary>
+    public async Task<List<(string InvoiceIdExt, string MovementType)>> GetAllInvoiceTypesAsync()
+    {
+        var results = new List<(string InvoiceIdExt, string MovementType)>();
+
+        try
+        {
+            using var connection = new FbConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var sql = @"
+                SELECT 
+                    CAST(m.CODMOVENDA AS VARCHAR(20)) AS CODMOVENDA,
+                    m.CODTIPOMOVIMENTO
+                FROM MOVENDA m
+                WHERE m.CODTIPOMOVIMENTO IN ('007', '018', '064')
+                  AND m.CODMOVENDA IS NOT NULL
+                ORDER BY m.DATA DESC";
+
+            using var command = new FbCommand(sql, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var invoiceId = reader["CODMOVENDA"]?.ToString()?.Trim();
+                var tipoMovimento = reader["CODTIPOMOVIMENTO"]?.ToString()?.Trim();
+
+                if (string.IsNullOrEmpty(invoiceId))
+                    continue;
+
+                // Mapear tipo de movimento: 007, 018 = produto, 064 = serviço
+                var movementType = tipoMovimento == "064" ? "servico" : "produto";
+
+                results.Add((invoiceId.PadLeft(9, '0'), movementType));
+            }
+
+            Log.Information($"Encontradas {results.Count} faturas para classificação de tipo");
+            
+            var produtos = results.Count(r => r.MovementType == "produto");
+            var servicos = results.Count(r => r.MovementType == "servico");
+            Log.Information($"   - Produtos (007, 018): {produtos}");
+            Log.Information($"   - Serviços (064): {servicos}");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro ao buscar tipos de movimento das faturas");
+            throw;
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Testa a conexão com o banco de dados (somente leitura)
     /// </summary>
     public async Task<bool> TestConnectionAsync()
