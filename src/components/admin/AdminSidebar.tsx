@@ -20,7 +20,6 @@ const menuItems = [
   { title: "Perfil", icon: User, path: "/admin/perfil" },
   { title: "Usuários", icon: Users, path: "/admin/usuarios" },
   { title: "Gerenciar Cadastros", icon: UserCog, path: "/admin/gerenciar-cadastros" },
-  { title: "Clientes Pendentes", icon: UserX, path: "/admin/clientes-pendentes" },
   { title: "Especificadores Pendentes", icon: UserX, path: "/admin/especificadores-pendentes" },
   { title: "Catálogo", icon: Package, path: "/admin/produtos" },
   { title: "Resgates", icon: ShoppingBag, path: "/admin/resgates" },
