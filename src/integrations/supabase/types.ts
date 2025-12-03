@@ -107,6 +107,7 @@ export type Database = {
           customer_id: string
           id: string
           invoice_id_ext: string
+          movement_type: string | null
           order_number: string | null
           pending_points_customer: number
           pending_points_specifier: number
@@ -121,6 +122,7 @@ export type Database = {
           customer_id: string
           id?: string
           invoice_id_ext: string
+          movement_type?: string | null
           order_number?: string | null
           pending_points_customer?: number
           pending_points_specifier?: number
@@ -135,6 +137,7 @@ export type Database = {
           customer_id?: string
           id?: string
           invoice_id_ext?: string
+          movement_type?: string | null
           order_number?: string | null
           pending_points_customer?: number
           pending_points_specifier?: number
