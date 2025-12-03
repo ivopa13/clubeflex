@@ -99,6 +99,11 @@ public class DatabaseService
         var batchSize = limit ?? 100;
         var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
+        // Filtrar apenas operações válidas para o Clube Flex:
+        // 007, 018 = vendas de produtos
+        // 064 = vendas de serviços
+        var validMovementTypes = "'007', '018', '064'";
+
         var query = $@"
             SELECT FIRST {batchSize}
                 m.CODMOVENDA as invoice_id,
@@ -107,6 +112,7 @@ public class DatabaseService
                 m.DATA as issued_at,
                 m.CODCLI as customer_id,
                 m.CODTRANS as specifier_id,
+                TRIM(m.CODTIPOMOVIMENTO) as movement_type_code,
                 c.NOMECLI as customer_name,
                 c.CPF as customer_cpf,
                 c.CNPJ as customer_cnpj,
@@ -118,6 +124,7 @@ public class DatabaseService
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
             LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
             WHERE m.CODCLI <> 3005
+            AND TRIM(m.CODTIPOMOVIMENTO) IN ({validMovementTypes})
             {dateFilter}
             ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
 
@@ -162,6 +169,15 @@ public class DatabaseService
                     continue;
                 }
 
+                // Mapear código de tipo de movimento para categoria
+                var movementTypeCode = reader["movement_type_code"]?.ToString()?.Trim() ?? "";
+                var movementType = movementTypeCode switch
+                {
+                    "007" or "018" => "produto",
+                    "064" => "servico",
+                    _ => "produto" // fallback
+                };
+
                 var payload = new FaturaCriadaPayload
                 {
                     EventId = eventId,
@@ -169,6 +185,7 @@ public class DatabaseService
                     OrderNumber = orderNumber,
                     TotalAmount = Convert.ToDecimal(reader["total_amount"]),
                     IssuedAt = issuedAt.Value.ToString("yyyy-MM-dd"),
+                    MovementType = movementType,
                     Customer = new CustomerData
                     {
                         IdExt = reader["customer_id"].ToString()!,

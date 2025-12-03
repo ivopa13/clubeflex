@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   CalendarIcon, 
   DollarSign, 
@@ -14,7 +15,9 @@ import {
   CreditCard,
   Banknote,
   Wallet,
-  PiggyBank
+  PiggyBank,
+  Package,
+  Wrench
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -96,6 +99,7 @@ const AdminVendas = () => {
           total_amount, 
           status, 
           created_at,
+          movement_type,
           payments (
             id,
             payment_type,
@@ -118,6 +122,13 @@ const AdminVendas = () => {
     const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
     const ticketCount = invoices.length;
     const avgTicket = ticketCount > 0 ? totalRevenue / ticketCount : 0;
+
+    // Separar por tipo de movimento (produto vs serviço)
+    const productInvoices = invoices.filter(inv => (inv.movement_type || 'produto') === 'produto');
+    const serviceInvoices = invoices.filter(inv => inv.movement_type === 'servico');
+
+    const productRevenue = productInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    const serviceRevenue = serviceInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
 
     // Tipos de Venda = agrupa pelos tipos de pagamento vinculados às faturas do período
     const salesByType: Record<string, { count: number; total: number }> = {};
@@ -148,6 +159,10 @@ const AdminVendas = () => {
       ticketCount,
       avgTicket,
       salesByType,
+      productRevenue,
+      productCount: productInvoices.length,
+      serviceRevenue,
+      serviceCount: serviceInvoices.length,
     };
   }, [invoicesData]);
 
@@ -285,6 +300,55 @@ const AdminVendas = () => {
               <Skeleton className="h-8 w-28" />
             ) : (
               <div className="text-2xl font-bold">{formatCurrency(metrics.avgTicket)}</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Vendas por Categoria (Produto vs Serviço) */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Vendas de Produtos</CardTitle>
+            <Package className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-blue-600">
+                  {formatCurrency(metrics.productRevenue)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {metrics.productCount} vendas • {metrics.totalRevenue > 0 
+                    ? ((metrics.productRevenue / metrics.totalRevenue) * 100).toFixed(1) 
+                    : "0"}% do total
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-green-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Vendas de Serviços</CardTitle>
+            <Wrench className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <>
+                <div className="text-2xl font-bold text-green-600">
+                  {formatCurrency(metrics.serviceRevenue)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {metrics.serviceCount} vendas • {metrics.totalRevenue > 0 
+                    ? ((metrics.serviceRevenue / metrics.totalRevenue) * 100).toFixed(1) 
+                    : "0"}% do total
+                </p>
+              </>
             )}
           </CardContent>
         </Card>

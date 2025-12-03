@@ -27,6 +27,9 @@ public class FaturaCriadaPayload
 
     [JsonProperty("specifier")]
     public SpecifierData? Specifier { get; set; }
+
+    [JsonProperty("movement_type")]
+    public string MovementType { get; set; } = "produto";
 }
 
 public class CustomerData

@@ -144,6 +144,7 @@ interface InvoicePayload {
   order_number?: string;
   total_amount: number;
   issued_at: string;
+  movement_type?: string; // produto ou servico
   customer: {
     id_ext: string;
     name: string;
@@ -179,7 +180,7 @@ Deno.serve(async (req) => {
     const payload: InvoicePayload = await req.json();
     console.log('Received invoice_created webhook:', payload);
 
-    const { event_id, invoice_id_ext, order_number, total_amount, customer, specifier } = payload;
+    const { event_id, invoice_id_ext, order_number, total_amount, customer, specifier, movement_type } = payload;
 
     // Validar dados do cliente
     if (!customer.name || customer.name.trim() === '') {
@@ -513,6 +514,7 @@ Deno.serve(async (req) => {
         pending_points_customer: pendingCustomer,
         pending_points_specifier: pendingSpecifier,
         status: 'created',
+        movement_type: movement_type || 'produto',
       })
       .select()
       .single();
