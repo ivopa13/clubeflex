@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Edit, Loader2 } from "lucide-react";
+import { Edit, Loader2, Search } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -47,6 +47,7 @@ type EditData = {
 
 const AdminGerenciarCadastros = () => {
   const queryClient = useQueryClient();
+  const [searchTerm, setSearchTerm] = useState("");
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
     type: "customer" | "specifier" | null;
@@ -147,6 +148,21 @@ const AdminGerenciarCadastros = () => {
     return doc;
   };
 
+  const filterBySearch = <T extends Customer | Specifier>(items: T[] | undefined): T[] => {
+    if (!items) return [];
+    if (!searchTerm.trim()) return items;
+    
+    const term = searchTerm.toLowerCase().replace(/\D/g, "") || searchTerm.toLowerCase();
+    return items.filter(item => 
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.doc.replace(/\D/g, "").includes(term) ||
+      (item.email && item.email.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  };
+
+  const filteredCustomers = filterBySearch(customers);
+  const filteredSpecifiers = filterBySearch(specifiers);
+
   return (
     <div className="space-y-6">
       <div>
@@ -156,10 +172,20 @@ const AdminGerenciarCadastros = () => {
         </p>
       </div>
 
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por nome, CPF/CNPJ ou email..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       <Tabs defaultValue="customers" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="customers">Clientes</TabsTrigger>
-          <TabsTrigger value="specifiers">Especificadores</TabsTrigger>
+          <TabsTrigger value="customers">Clientes ({filteredCustomers.length})</TabsTrigger>
+          <TabsTrigger value="specifiers">Especificadores ({filteredSpecifiers.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="customers" className="space-y-4">
@@ -167,7 +193,7 @@ const AdminGerenciarCadastros = () => {
             <CardHeader>
               <CardTitle>Clientes Cadastrados</CardTitle>
               <CardDescription>
-                {customers?.length || 0} clientes no sistema
+                {searchTerm ? `${filteredCustomers.length} de ${customers?.length || 0}` : `${customers?.length || 0}`} clientes
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -191,7 +217,7 @@ const AdminGerenciarCadastros = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {customers?.map((customer) => (
+                      {filteredCustomers.map((customer) => (
                         <TableRow key={customer.id}>
                           <TableCell className="font-mono text-sm">{customer.customer_id_ext}</TableCell>
                           <TableCell className="font-medium">{customer.name}</TableCell>
@@ -232,7 +258,7 @@ const AdminGerenciarCadastros = () => {
             <CardHeader>
               <CardTitle>Especificadores Cadastrados</CardTitle>
               <CardDescription>
-                {specifiers?.length || 0} especificadores no sistema
+                {searchTerm ? `${filteredSpecifiers.length} de ${specifiers?.length || 0}` : `${specifiers?.length || 0}`} especificadores
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -257,7 +283,7 @@ const AdminGerenciarCadastros = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {specifiers?.map((specifier) => (
+                      {filteredSpecifiers.map((specifier) => (
                         <TableRow key={specifier.id}>
                           <TableCell className="font-mono text-sm">{specifier.specifier_id_ext}</TableCell>
                           <TableCell className="font-medium">{specifier.name}</TableCell>
