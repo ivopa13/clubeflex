@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Edit, Loader2, Search } from "lucide-react";
+import { Edit, Loader2, Search, UserPlus } from "lucide-react";
 
 interface Customer {
   id: string;
@@ -49,6 +49,7 @@ const AdminGerenciarCadastros = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [linkedFilter, setLinkedFilter] = useState<string>("all");
+  const [creatingUserId, setCreatingUserId] = useState<string | null>(null);
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
     type: "customer" | "specifier" | null;
@@ -110,6 +111,46 @@ const AdminGerenciarCadastros = () => {
       toast.error(`Erro ao atualizar: ${error.message}`);
     },
   });
+
+  const createUserMutation = useMutation({
+    mutationFn: async ({ type, item }: { type: "customer" | "specifier"; item: Customer | Specifier }) => {
+      const { data, error } = await supabase.functions.invoke("create-user-account", {
+        body: {
+          type,
+          id: item.id,
+          name: item.name,
+          email: item.email,
+          doc: item.doc,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: variables.type === "customer" ? ["admin-customers"] : ["admin-specifiers"] });
+      if (data?.warning) {
+        toast.warning(data.warning);
+      } else {
+        toast.success("Usuário criado e email enviado com sucesso!");
+      }
+      setCreatingUserId(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao criar usuário: ${error.message}`);
+      setCreatingUserId(null);
+    },
+  });
+
+  const handleCreateUser = (type: "customer" | "specifier", item: Customer | Specifier) => {
+    if (!item.email) {
+      toast.error("Este cadastro não possui email. Edite o cadastro para adicionar um email primeiro.");
+      return;
+    }
+    setCreatingUserId(item.id);
+    createUserMutation.mutate({ type, item });
+  };
 
   const handleEdit = (type: "customer" | "specifier", item: Customer | Specifier) => {
     setEditDialog({
@@ -275,13 +316,32 @@ const AdminGerenciarCadastros = () => {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit("customer", customer)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit("customer", customer)}
+                                title="Editar cadastro"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {!customer.user_id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCreateUser("customer", customer)}
+                                  disabled={creatingUserId === customer.id}
+                                  title="Criar acesso ao Flex Clube"
+                                  className="text-primary hover:text-primary"
+                                >
+                                  {creatingUserId === customer.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <UserPlus className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -344,13 +404,32 @@ const AdminGerenciarCadastros = () => {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit("specifier", specifier)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit("specifier", specifier)}
+                                title="Editar cadastro"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              {!specifier.user_id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCreateUser("specifier", specifier)}
+                                  disabled={creatingUserId === specifier.id}
+                                  title="Criar acesso ao Flex Clube"
+                                  className="text-primary hover:text-primary"
+                                >
+                                  {creatingUserId === specifier.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <UserPlus className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
