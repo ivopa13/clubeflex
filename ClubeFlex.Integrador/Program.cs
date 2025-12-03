@@ -11,12 +11,14 @@ static async Task<int> Main(string[] args)
         // MODO SILENCIOSO É O PADRÃO - fecha automaticamente
         // Use --interactive ou -i se quiser que espere Enter no final
         bool interactiveMode = args.Contains("--interactive") || args.Contains("-i");
+        bool updateTypesMode = args.Contains("--update-types");
         
         // PRIMEIRO: Output básico sem depender de nada
         Console.WriteLine("==============================================");
-        Console.WriteLine("       CLUBE FLEX INTEGRADOR v1.2");
+        Console.WriteLine("       CLUBE FLEX INTEGRADOR v1.3");
         Console.WriteLine("==============================================");
         if (!interactiveMode) Console.WriteLine("       [FECHA AUTOMATICAMENTE]");
+        if (updateTypesMode) Console.WriteLine("       [MODO: ATUALIZAÇÃO DE TIPOS]");
         Console.WriteLine($"Data/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         Console.WriteLine($"Diretório atual: {Directory.GetCurrentDirectory()}");
         Console.WriteLine($"appsettings.json existe: {File.Exists("appsettings.json")}");
@@ -77,12 +79,24 @@ static async Task<int> Main(string[] args)
             Console.WriteLine("Serviços inicializados com sucesso.");
             Console.WriteLine();
 
-            // Executar sincronização
-            Log.Information("Iniciando sincronização...");
-            Console.WriteLine("Iniciando sincronização...");
-            await syncService.ExecuteSyncAsync();
-            Log.Information("Sincronização concluída com sucesso");
-            Console.WriteLine("Sincronização concluída com sucesso!");
+            if (updateTypesMode)
+            {
+                // Modo de atualização de tipos de movimento
+                Log.Information("Iniciando atualização de tipos de movimento...");
+                Console.WriteLine("Iniciando atualização de tipos de movimento...");
+                await syncService.UpdateInvoiceTypesAsync();
+                Log.Information("Atualização de tipos concluída");
+                Console.WriteLine("Atualização de tipos concluída!");
+            }
+            else
+            {
+                // Executar sincronização normal
+                Log.Information("Iniciando sincronização...");
+                Console.WriteLine("Iniciando sincronização...");
+                await syncService.ExecuteSyncAsync();
+                Log.Information("Sincronização concluída com sucesso");
+                Console.WriteLine("Sincronização concluída com sucesso!");
+            }
 
             return 0;
         }
