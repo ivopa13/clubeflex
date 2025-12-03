@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ArrowUpDown, Search, CalendarIcon } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ArrowUpDown, Search, CalendarIcon, DollarSign, Receipt, TrendingUp } from "lucide-react";
 import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -90,6 +91,21 @@ const AdminFaturas = () => {
       invoice.specifier?.name?.toLowerCase().includes(term)
     );
   }, [invoices, searchTerm]);
+
+  const metrics = useMemo(() => {
+    const data = invoices || [];
+    const totalRevenue = data.reduce((sum, inv: any) => sum + Number(inv.total_amount), 0);
+    const ticketCount = data.length;
+    const avgTicket = ticketCount > 0 ? totalRevenue / ticketCount : 0;
+    return { totalRevenue, ticketCount, avgTicket };
+  }, [invoices]);
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
 
   const getStatusLabel = (status: string, releasedCustomer: number, releasedSpecifier: number) => {
     const totalReleased = Number(releasedCustomer) + Number(releasedSpecifier);
@@ -183,6 +199,53 @@ const AdminFaturas = () => {
       <p className="text-sm text-muted-foreground">
         Exibindo dados de {format(dateRange.from, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })} até {format(dateRange.to, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
       </p>
+
+      {/* Main Metrics */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-32" />
+            ) : (
+              <div className="text-2xl font-bold text-primary">
+                {formatCurrency(metrics.totalRevenue)}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Número de Faturas</CardTitle>
+            <Receipt className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{metrics.ticketCount}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-28" />
+            ) : (
+              <div className="text-2xl font-bold">{formatCurrency(metrics.avgTicket)}</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 min-w-[200px] max-w-md">
