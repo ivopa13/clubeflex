@@ -1,4 +1,4 @@
-import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign, UserX, User, UserCog, TrendingUp, FileCheck } from "lucide-react";
+import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign, UserX, User, UserCog, TrendingUp } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -26,7 +26,6 @@ const menuItems = [
   { title: "Resgates", icon: ShoppingBag, path: "/admin/resgates" },
   { title: "Faturas", icon: FileText, path: "/admin/faturas" },
   { title: "Pagamentos", icon: DollarSign, path: "/admin/pagamentos" },
-  { title: "Cheques e Boletos", icon: FileCheck, path: "/admin/cheques-boletos" },
   { title: "Relatórios", icon: BarChart3, path: "/admin/relatorios" },
   { title: "Logs Integração", icon: Database, path: "/admin/logs" },
   { title: "Erros de Validação", icon: AlertTriangle, path: "/admin/erros-validacao" },
