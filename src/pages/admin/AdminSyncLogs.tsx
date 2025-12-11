@@ -108,7 +108,16 @@ const AdminSyncLogs = () => {
 
   // Group logs by execution (same minute)
   const executions: SyncExecution[] = useMemo(() => {
-    return logs ? groupLogsByExecution(logs) : [];
+    const result = logs ? groupLogsByExecution(logs) : [];
+    console.log("Logs recebidos:", logs?.length || 0);
+    console.log("Execuções agrupadas:", result.length);
+    console.log("Execuções:", result.map(e => ({
+      timestamp: e.timestamp,
+      totalEvents: e.totalEvents,
+      invoiceCount: e.invoiceCount,
+      paymentCount: e.paymentCount
+    })));
+    return result;
   }, [logs]);
 
   if (isLoading) {
