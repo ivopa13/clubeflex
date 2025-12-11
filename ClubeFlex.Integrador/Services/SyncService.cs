@@ -14,6 +14,12 @@ public class SyncService
     private readonly bool _testMode;
     private readonly int _testModeLimit;
     private readonly DateTime? _syncFromDate;
+    
+    // Contadores para rastreamento de execução
+    private int _totalInvoiceCount;
+    private int _totalPaymentCount;
+    private int _totalSuccessCount;
+    private int _totalErrorCount;
 
     public SyncService(
         DatabaseService databaseService,
@@ -62,25 +68,63 @@ public class SyncService
     /// </summary>
     public async Task ExecuteSyncAsync()
     {
-        Log.Information("=== Iniciando Teste de Conectividade ===");
-
-        // Testar conexões
-        var dbOk = await _databaseService.TestConnectionAsync();
-        var apiOk = await _apiService.TestConnectionAsync();
-
-        if (!dbOk || !apiOk)
+        // Resetar contadores
+        _totalInvoiceCount = 0;
+        _totalPaymentCount = 0;
+        _totalSuccessCount = 0;
+        _totalErrorCount = 0;
+        
+        // Iniciar rastreamento de execução
+        await _cloudSyncLogService.StartExecutionAsync();
+        
+        try
         {
-            Log.Fatal("Falha nos testes de conectividade. Abortando sincronização.");
-            return;
+            Log.Information("=== Iniciando Teste de Conectividade ===");
+
+            // Testar conexões
+            var dbOk = await _databaseService.TestConnectionAsync();
+            var apiOk = await _apiService.TestConnectionAsync();
+
+            if (!dbOk || !apiOk)
+            {
+                Log.Fatal("Falha nos testes de conectividade. Abortando sincronização.");
+                await _cloudSyncLogService.FinishExecutionAsync("failed", 0, 0, 0, 0, 0);
+                return;
+            }
+
+            Log.Information("=== Sincronizando Faturas Criadas ===");
+            await SyncInvoicesAsync();
+
+            Log.Information("=== Sincronizando Pagamentos Confirmados ===");
+            await SyncPaymentsAsync();
+
+            Log.Information("=== Sincronização Finalizada ===");
+            
+            var totalEvents = _totalInvoiceCount + _totalPaymentCount;
+            var status = _totalErrorCount > 0 ? "completed" : "completed";
+            
+            await _cloudSyncLogService.FinishExecutionAsync(
+                status, 
+                totalEvents, 
+                _totalSuccessCount, 
+                _totalErrorCount, 
+                _totalInvoiceCount, 
+                _totalPaymentCount
+            );
         }
-
-        Log.Information("=== Sincronizando Faturas Criadas ===");
-        await SyncInvoicesAsync();
-
-        Log.Information("=== Sincronizando Pagamentos Confirmados ===");
-        await SyncPaymentsAsync();
-
-        Log.Information("=== Sincronização Finalizada ===");
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro durante a sincronização");
+            await _cloudSyncLogService.FinishExecutionAsync(
+                "failed", 
+                _totalInvoiceCount + _totalPaymentCount, 
+                _totalSuccessCount, 
+                _totalErrorCount, 
+                _totalInvoiceCount, 
+                _totalPaymentCount
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -171,10 +215,17 @@ public class SyncService
 
                 await _cloudSyncLogService.SaveSyncLogAsync(log);
 
+                _totalInvoiceCount++;
                 if (result.Success)
+                {
                     success++;
+                    _totalSuccessCount++;
+                }
                 else
+                {
                     errors++;
+                    _totalErrorCount++;
+                }
             }
 
             Log.Information($"Faturas processadas: {success} sucesso, {errors} erros");
@@ -242,10 +293,17 @@ public class SyncService
 
                 await _cloudSyncLogService.SaveSyncLogAsync(log);
 
+                _totalPaymentCount++;
                 if (result.Success)
+                {
                     success++;
+                    _totalSuccessCount++;
+                }
                 else
+                {
                     errors++;
+                    _totalErrorCount++;
+                }
             }
 
             Log.Information($"✅ Pagamentos processados: {success} sucesso, {errors} erros");

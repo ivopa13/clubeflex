@@ -11,7 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Eye, FileText, DollarSign, CalendarIcon, RefreshCw } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -26,16 +26,21 @@ interface SyncLog {
   updated_at: string;
   payload: any;
   error_message: string | null;
+  execution_id: string | null;
 }
 
-interface SyncExecution {
-  timestamp: Date;
-  logs: SyncLog[];
-  totalEvents: number;
-  invoiceCount: number;
-  paymentCount: number;
-  successCount: number;
-  errorCount: number;
+interface IntegratorExecution {
+  id: string;
+  execution_id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: string;
+  total_events: number;
+  success_count: number;
+  error_count: number;
+  invoice_count: number;
+  payment_count: number;
+  logs?: SyncLog[];
 }
 
 type DateRange = {
@@ -88,28 +93,45 @@ const AdminSyncLogs = () => {
     setPresetFilter("custom");
   };
 
-  const { data: logs, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["sync-logs", dateRange.from.toISOString(), dateRange.to.toISOString()],
+  // Fetch executions
+  const { data: executions, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["integrator-executions", dateRange.from.toISOString(), dateRange.to.toISOString()],
     queryFn: async () => {
-      console.log("Buscando logs de:", dateRange.from.toISOString(), "até:", dateRange.to.toISOString());
-      const { data, error } = await supabase
+      // Fetch executions
+      const { data: executionsData, error: execError } = await supabase
+        .from("integrator_executions")
+        .select("*")
+        .gte("started_at", dateRange.from.toISOString())
+        .lte("started_at", dateRange.to.toISOString())
+        .order("started_at", { ascending: false });
+
+      if (execError) throw execError;
+
+      // Fetch logs for each execution
+      const executionIds = executionsData?.map(e => e.execution_id) || [];
+      
+      if (executionIds.length === 0) {
+        return [] as IntegratorExecution[];
+      }
+
+      const { data: logsData, error: logsError } = await supabase
         .from("sync_logs")
         .select("*")
-        .gte("updated_at", dateRange.from.toISOString())
-        .lte("updated_at", dateRange.to.toISOString())
-        .order("updated_at", { ascending: false });
+        .in("execution_id", executionIds)
+        .order("created_at", { ascending: false });
 
-      console.log("Logs encontrados:", data?.length || 0);
-      if (error) throw error;
-      return data as SyncLog[];
+      if (logsError) throw logsError;
+
+      // Map logs to executions
+      const executionsWithLogs: IntegratorExecution[] = (executionsData || []).map(exec => ({
+        ...exec,
+        logs: (logsData || []).filter(log => log.execution_id === exec.execution_id)
+      }));
+
+      return executionsWithLogs;
     },
-    staleTime: 0, // Sempre buscar dados frescos
+    staleTime: 0,
   });
-
-  // Group logs by execution (9-minute windows from first log)
-  const executions: SyncExecution[] = useMemo(() => {
-    return logs ? groupLogsByExecution(logs) : [];
-  }, [logs]);
 
   if (isLoading) {
     return (
@@ -131,6 +153,12 @@ const AdminSyncLogs = () => {
     pending: { label: "Pendente", variant: "secondary" as const, className: "" },
     success: { label: "Sucesso", variant: "default" as const, className: "bg-green-500 hover:bg-green-600" },
     error: { label: "Erro", variant: "destructive" as const, className: "" },
+  };
+
+  const executionStatusMap = {
+    running: { label: "Em execução", variant: "secondary" as const, className: "bg-blue-500 hover:bg-blue-600" },
+    completed: { label: "Concluído", variant: "default" as const, className: "bg-green-500 hover:bg-green-600" },
+    failed: { label: "Falhou", variant: "destructive" as const, className: "" },
   };
 
   const eventTypeMap = {
@@ -241,7 +269,7 @@ const AdminSyncLogs = () => {
         <CardHeader>
           <CardTitle>Execuções do Integrador</CardTitle>
           <CardDescription>
-            {executions.length > 0 
+            {executions && executions.length > 0 
               ? `${executions.length} execuções encontradas`
               : "Nenhuma execução registrada no período"}
           </CardDescription>
@@ -249,18 +277,18 @@ const AdminSyncLogs = () => {
         <CardContent>
           {!executions || executions.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>Nenhum log de sincronização encontrado no período selecionado.</p>
+              <p>Nenhuma execução do integrador encontrada no período selecionado.</p>
+              <p className="text-sm mt-2">O integrador C# precisa ser atualizado para registrar execuções.</p>
             </div>
           ) : (
             <Accordion type="single" collapsible className="space-y-4">
               {executions.map((execution, index) => {
-                const hasErrors = execution.errorCount > 0;
-                const statusVariant = hasErrors ? "destructive" : "default";
-                const statusClassName = hasErrors ? "" : "bg-green-500 hover:bg-green-600";
+                const hasErrors = execution.error_count > 0;
+                const execStatus = executionStatusMap[execution.status as keyof typeof executionStatusMap] || executionStatusMap.completed;
 
                 return (
                   <AccordionItem 
-                    key={`execution-${execution.timestamp.getTime()}`} 
+                    key={execution.id} 
                     value={`execution-${index}`}
                     className="border rounded-lg px-4 bg-card"
                   >
@@ -269,96 +297,110 @@ const AdminSyncLogs = () => {
                         <div className="flex items-center gap-4">
                           <div className="text-left">
                             <div className="font-semibold text-base">
-                              {format(execution.timestamp, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                              {format(new Date(execution.started_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                             </div>
                             <div className="text-sm text-muted-foreground mt-1">
-                              {execution.invoiceCount > 0 && (
+                              {execution.invoice_count > 0 && (
                                 <span className="inline-flex items-center gap-1 mr-3">
                                   <FileText className="h-3 w-3" />
-                                  {execution.invoiceCount} {execution.invoiceCount === 1 ? 'fatura' : 'faturas'}
+                                  {execution.invoice_count} {execution.invoice_count === 1 ? 'fatura' : 'faturas'}
                                 </span>
                               )}
-                              {execution.paymentCount > 0 && (
+                              {execution.payment_count > 0 && (
                                 <span className="inline-flex items-center gap-1">
                                   <DollarSign className="h-3 w-3" />
-                                  {execution.paymentCount} {execution.paymentCount === 1 ? 'pagamento' : 'pagamentos'}
+                                  {execution.payment_count} {execution.payment_count === 1 ? 'pagamento' : 'pagamentos'}
                                 </span>
+                              )}
+                              {execution.total_events === 0 && (
+                                <span className="text-muted-foreground">Sem eventos</span>
                               )}
                             </div>
                           </div>
                         </div>
                         
                         <div className="flex items-center gap-2">
-                          <Badge variant={statusVariant} className={statusClassName}>
-                            {execution.successCount} {execution.successCount === 1 ? 'sucesso' : 'sucessos'}
+                          <Badge variant={execStatus.variant} className={execStatus.className}>
+                            {execStatus.label}
                           </Badge>
+                          {execution.success_count > 0 && (
+                            <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                              {execution.success_count} {execution.success_count === 1 ? 'sucesso' : 'sucessos'}
+                            </Badge>
+                          )}
                           {hasErrors && (
                             <Badge variant="destructive">
-                              {execution.errorCount} {execution.errorCount === 1 ? 'erro' : 'erros'}
+                              {execution.error_count} {execution.error_count === 1 ? 'erro' : 'erros'}
                             </Badge>
                           )}
                           <Badge variant="outline" className="ml-2">
-                            {execution.totalEvents} {execution.totalEvents === 1 ? 'evento' : 'eventos'}
+                            {execution.total_events} {execution.total_events === 1 ? 'evento' : 'eventos'}
                           </Badge>
                         </div>
                       </div>
                     </AccordionTrigger>
                     
                     <AccordionContent className="pb-4 pt-2">
-                      <div className="border rounded-md">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-[140px]">Event ID</TableHead>
-                              <TableHead>Tipo</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead className="w-[100px]">Tentativas</TableHead>
-                              <TableHead>Horário</TableHead>
-                              <TableHead className="text-right">Ações</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {execution.logs.map((log) => {
-                              const status = statusMap[log.status as keyof typeof statusMap];
-                              const eventType = eventTypeMap[log.event_type as keyof typeof eventTypeMap];
-                              const EventIcon = eventType?.icon;
+                      {execution.logs && execution.logs.length > 0 ? (
+                        <div className="border rounded-md">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="w-[140px]">Event ID</TableHead>
+                                <TableHead>Tipo</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="w-[100px]">Tentativas</TableHead>
+                                <TableHead>Horário</TableHead>
+                                <TableHead className="text-right">Ações</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {execution.logs.map((log) => {
+                                const status = statusMap[log.status as keyof typeof statusMap];
+                                const eventType = eventTypeMap[log.event_type as keyof typeof eventTypeMap];
+                                const EventIcon = eventType?.icon;
 
-                              return (
-                                <TableRow key={log.id}>
-                                  <TableCell className="font-mono text-xs">{log.event_id}</TableCell>
-                                  <TableCell>
-                                    <div className="flex items-center gap-2">
-                                      {EventIcon && <EventIcon className="h-4 w-4 text-muted-foreground" />}
-                                      <span className="font-medium">
-                                        {eventType?.label || log.event_type}
-                                      </span>
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge variant={status.variant} className={status.className}>
-                                      {status.label}
-                                    </Badge>
-                                  </TableCell>
-                                  <TableCell>{log.attempts}</TableCell>
-                                  <TableCell className="text-sm">
-                                    {format(new Date(log.created_at), "HH:mm:ss", { locale: ptBR })}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => setSelectedLog(log)}
-                                    >
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      Ver JSON
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
+                                return (
+                                  <TableRow key={log.id}>
+                                    <TableCell className="font-mono text-xs">{log.event_id}</TableCell>
+                                    <TableCell>
+                                      <div className="flex items-center gap-2">
+                                        {EventIcon && <EventIcon className="h-4 w-4 text-muted-foreground" />}
+                                        <span className="font-medium">
+                                          {eventType?.label || log.event_type}
+                                        </span>
+                                      </div>
+                                    </TableCell>
+                                    <TableCell>
+                                      <Badge variant={status?.variant || "secondary"} className={status?.className || ""}>
+                                        {status?.label || log.status}
+                                      </Badge>
+                                    </TableCell>
+                                    <TableCell>{log.attempts}</TableCell>
+                                    <TableCell className="text-sm">
+                                      {format(new Date(log.created_at), "HH:mm:ss", { locale: ptBR })}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setSelectedLog(log)}
+                                      >
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        Ver JSON
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground">
+                          <p>Nenhum log vinculado a esta execução.</p>
+                        </div>
+                      )}
                     </AccordionContent>
                   </AccordionItem>
                 );
@@ -405,69 +447,5 @@ const AdminSyncLogs = () => {
     </div>
   );
 };
-
-function groupLogsByExecution(logs: SyncLog[]): SyncExecution[] {
-  if (!logs || logs.length === 0) return [];
-
-  // Sort logs by created_at ascending to process in chronological order
-  const sortedLogs = [...logs].sort((a, b) => 
-    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-  );
-
-  const executions: SyncExecution[] = [];
-  let currentGroup: SyncLog[] = [];
-  let groupStartTime: Date | null = null;
-  const WINDOW_MINUTES = 9; // Group executions within 9-minute windows
-
-  for (const log of sortedLogs) {
-    const logTime = new Date(log.created_at);
-
-    if (groupStartTime === null) {
-      // Start a new group
-      groupStartTime = logTime;
-      currentGroup = [log];
-    } else {
-      // Check if this log is within 9 minutes of the group start
-      const diffMinutes = (logTime.getTime() - groupStartTime.getTime()) / (1000 * 60);
-
-      if (diffMinutes <= WINDOW_MINUTES) {
-        // Add to current group
-        currentGroup.push(log);
-      } else {
-        // Finalize current group and start a new one
-        if (currentGroup.length > 0) {
-          executions.push(createExecution(currentGroup, groupStartTime));
-        }
-        groupStartTime = logTime;
-        currentGroup = [log];
-      }
-    }
-  }
-
-  // Don't forget the last group
-  if (currentGroup.length > 0 && groupStartTime) {
-    executions.push(createExecution(currentGroup, groupStartTime));
-  }
-
-  // Return executions sorted by most recent first
-  return executions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-}
-
-function createExecution(logs: SyncLog[], startTime: Date): SyncExecution {
-  const invoiceCount = logs.filter(l => l.event_type === 'fatura' || l.event_type === 'invoice_created').length;
-  const paymentCount = logs.filter(l => l.event_type === 'pagamento' || l.event_type === 'payment_confirmed').length;
-  const successCount = logs.filter(l => l.status === 'success').length;
-  const errorCount = logs.filter(l => l.status === 'error').length;
-
-  return {
-    timestamp: startTime,
-    logs: logs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-    totalEvents: logs.length,
-    invoiceCount,
-    paymentCount,
-    successCount,
-    errorCount,
-  };
-}
 
 export default AdminSyncLogs;
