@@ -12,6 +12,7 @@ public class CloudSyncLogService
     private readonly string _functionsUrl;
     private readonly string _apiUrl;
     private readonly string _apiKey;
+    private string? _currentExecutionId;
 
     public CloudSyncLogService(IConfiguration configuration)
     {
@@ -46,6 +47,99 @@ public class CloudSyncLogService
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
     }
 
+    /// <summary>
+    /// Inicia uma nova execução do integrador
+    /// </summary>
+    public async Task<string> StartExecutionAsync()
+    {
+        _currentExecutionId = $"EXEC_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..8]}";
+        
+        try
+        {
+            var payload = new
+            {
+                action = "start",
+                execution_id = _currentExecutionId
+            };
+
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync($"{_functionsUrl}/integrator-execution", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log.Warning($"⚠️ Não foi possível registrar início da execução: {response.StatusCode} - {errorContent}");
+            }
+            else
+            {
+                Log.Information($"🚀 Execução iniciada: {_currentExecutionId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "⚠️ Não foi possível registrar início da execução. Continuando sem rastreamento.");
+        }
+
+        return _currentExecutionId;
+    }
+
+    /// <summary>
+    /// Finaliza a execução atual do integrador
+    /// </summary>
+    public async Task FinishExecutionAsync(string status, int totalEvents, int successCount, int errorCount, int invoiceCount, int paymentCount)
+    {
+        if (string.IsNullOrEmpty(_currentExecutionId))
+        {
+            Log.Warning("⚠️ Nenhuma execução ativa para finalizar");
+            return;
+        }
+
+        try
+        {
+            var payload = new
+            {
+                action = "finish",
+                execution_id = _currentExecutionId,
+                status = status,
+                total_events = totalEvents,
+                success_count = successCount,
+                error_count = errorCount,
+                invoice_count = invoiceCount,
+                payment_count = paymentCount
+            };
+
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await _httpClient.PostAsync($"{_functionsUrl}/integrator-execution", content);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                Log.Warning($"⚠️ Não foi possível registrar fim da execução: {response.StatusCode} - {errorContent}");
+            }
+            else
+            {
+                Log.Information($"✅ Execução finalizada: {_currentExecutionId} ({status})");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "⚠️ Não foi possível registrar fim da execução");
+        }
+        finally
+        {
+            _currentExecutionId = null;
+        }
+    }
+
+    /// <summary>
+    /// Retorna o ID da execução atual
+    /// </summary>
+    public string? GetCurrentExecutionId() => _currentExecutionId;
+
     public async Task SaveSyncLogAsync(SyncLog log)
     {
         try
@@ -66,7 +160,8 @@ public class CloudSyncLogService
                 status = log.Status,
                 payload = log.Payload != null ? JsonSerializer.Deserialize<object>(log.Payload) : null,
                 error_message = log.ErrorMessage,
-                attempts = log.Attempts
+                attempts = log.Attempts,
+                execution_id = _currentExecutionId
             };
 
             var json = JsonSerializer.Serialize(payload);

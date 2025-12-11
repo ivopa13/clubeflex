@@ -101,6 +101,51 @@ export type Database = {
         }
         Relationships: []
       }
+      integrator_executions: {
+        Row: {
+          created_at: string
+          error_count: number
+          execution_id: string
+          finished_at: string | null
+          id: string
+          invoice_count: number
+          payment_count: number
+          started_at: string
+          status: string
+          success_count: number
+          total_events: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error_count?: number
+          execution_id: string
+          finished_at?: string | null
+          id?: string
+          invoice_count?: number
+          payment_count?: number
+          started_at?: string
+          status?: string
+          success_count?: number
+          total_events?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error_count?: number
+          execution_id?: string
+          finished_at?: string | null
+          id?: string
+          invoice_count?: number
+          payment_count?: number
+          started_at?: string
+          status?: string
+          success_count?: number
+          total_events?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           created_at: string | null
@@ -468,6 +513,7 @@ export type Database = {
           error_message: string | null
           event_id: string
           event_type: string
+          execution_id: string | null
           id: string
           payload: Json | null
           status: string
@@ -479,6 +525,7 @@ export type Database = {
           error_message?: string | null
           event_id: string
           event_type: string
+          execution_id?: string | null
           id?: string
           payload?: Json | null
           status?: string
@@ -490,6 +537,7 @@ export type Database = {
           error_message?: string | null
           event_id?: string
           event_type?: string
+          execution_id?: string | null
           id?: string
           payload?: Json | null
           status?: string

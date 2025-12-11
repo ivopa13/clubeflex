@@ -12,6 +12,7 @@ interface SyncLogPayload {
   payload?: any;
   error_message?: string;
   attempts?: number;
+  execution_id?: string;
 }
 
 Deno.serve(async (req) => {
@@ -53,6 +54,7 @@ Deno.serve(async (req) => {
           payload: body.payload || null,
           error_message: body.error_message || null,
           attempts: body.attempts || 0,
+          execution_id: body.execution_id || null,
           updated_at: new Date().toISOString(),
         },
         {
