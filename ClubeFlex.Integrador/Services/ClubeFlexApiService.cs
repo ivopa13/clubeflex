@@ -99,6 +99,27 @@ public class ClubeFlexApiService
 
             if (response.IsSuccessStatusCode)
             {
+                // Verificar se foi "ignorado" por fatura não encontrada
+                try
+                {
+                    var successResponse = JsonConvert.DeserializeObject<dynamic>(responseBody);
+                    if (successResponse?.warning != null)
+                    {
+                        var warning = successResponse.warning.ToString();
+                        Log.Warning($"⚠️ Pagamento da fatura {payload.InvoiceIdExt} ignorado: {warning}");
+                        return new ApiResponse 
+                        { 
+                            Success = false, 
+                            IsValidationError = true,
+                            ErrorMessage = $"Fatura não encontrada: {payload.InvoiceIdExt}. Sincronize a fatura primeiro."
+                        };
+                    }
+                }
+                catch
+                {
+                    // Se não conseguir parsear, assume que foi sucesso normal
+                }
+                
                 Log.Information($"✓ Pagamento da fatura {payload.InvoiceIdExt} enviado com sucesso");
                 return new ApiResponse { Success = true };
             }
