@@ -99,10 +99,11 @@ public class DatabaseService
         var batchSize = limit ?? 100;
         var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
-        // Filtrar apenas operações válidas para o Clube Flex:
-        // 007, 018 = vendas de produtos
-        // 064 = vendas de serviços
-        var validMovementTypes = "'007', '018', '064'";
+        // Filtrar operações de vendas válidas para o Clube Flex:
+        // Tipos comuns de movimento de venda: 001, 002, 003, 007, 018, 064, 101, 102, etc.
+        // Removemos filtro restritivo para capturar todas as vendas
+        // A lógica: qualquer movimento com VALORTOTALNOTA > 0 é considerado venda
+        var validMovementTypes = "'001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '064', '101', '102', '103'";
 
         var query = $@"
             SELECT FIRST {batchSize}
