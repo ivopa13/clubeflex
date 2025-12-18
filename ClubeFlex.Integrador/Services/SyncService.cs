@@ -40,8 +40,9 @@ public class SyncService
         {
             if (syncFromDateStr.Equals("TODAY", StringComparison.OrdinalIgnoreCase))
             {
-                _syncFromDate = DateTime.Today;
-                Log.Information($"🔄 Configurado para sincronizar apenas dados de hoje em diante: {_syncFromDate.Value:dd/MM/yyyy}");
+                // Buscar de ONTEM até hoje para garantir que não perdemos dados
+                _syncFromDate = DateTime.Today.AddDays(-1);
+                Log.Information($"🔄 Configurado para sincronizar dados de ontem até hoje: {_syncFromDate.Value:dd/MM/yyyy} - {DateTime.Today:dd/MM/yyyy}");
             }
             else if (DateTime.TryParse(syncFromDateStr, out var date))
             {
