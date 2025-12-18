@@ -10,7 +10,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowUpDown, Search, CalendarIcon, DollarSign, Receipt, TrendingUp } from "lucide-react";
-import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, startOfDay, endOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 
@@ -170,7 +170,13 @@ const AdminFaturas = () => {
                     <Calendar
                       mode="single"
                       selected={tempDateRange.from}
-                      onSelect={(date) => date && setTempDateRange(prev => ({ ...prev, from: date }))}
+                      onSelect={(date) =>
+                        date &&
+                        setTempDateRange((prev) => ({
+                          ...prev,
+                          from: startOfDay(date),
+                        }))
+                      }
                       locale={ptBR}
                       className={cn("p-3 pointer-events-auto border rounded-md")}
                     />
@@ -180,7 +186,13 @@ const AdminFaturas = () => {
                     <Calendar
                       mode="single"
                       selected={tempDateRange.to}
-                      onSelect={(date) => date && setTempDateRange(prev => ({ ...prev, to: date }))}
+                      onSelect={(date) =>
+                        date &&
+                        setTempDateRange((prev) => ({
+                          ...prev,
+                          to: endOfDay(date),
+                        }))
+                      }
                       locale={ptBR}
                       className={cn("p-3 pointer-events-auto border rounded-md")}
                     />
