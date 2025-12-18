@@ -99,11 +99,13 @@ public class DatabaseService
         var batchSize = limit ?? 100;
         var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
-        // Filtrar operações de vendas válidas para o Clube Flex:
-        // Tipos comuns de movimento de venda: 001, 002, 003, 007, 018, 064, 101, 102, etc.
-        // Removemos filtro restritivo para capturar todas as vendas
-        // A lógica: qualquer movimento com VALORTOTALNOTA > 0 é considerado venda
-        var validMovementTypes = "'001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019', '020', '064', '101', '102', '103'";
+        // IMPORTANTE:
+        // Já tivemos casos onde filtrar por tipo de movimento (CODTIPOMOVIMENTO / TIPOMOV)
+        // zerava o retorno dependendo da configuração do CPlus.
+        // Para NÃO perder faturas, a regra aqui é simples:
+        // - somente vendas com valor > 0
+        // - respeitando o recorte por data (fromDate)
+        // - e a filtragem por event_id já sincronizado (syncedEventIds)
 
         var query = $@"
             SELECT FIRST {batchSize}
@@ -113,7 +115,6 @@ public class DatabaseService
                 m.DATA as issued_at,
                 m.CODCLI as customer_id,
                 m.CODTRANS as specifier_id,
-                TRIM(m.CODTIPOMOVIMENTO) as movement_type_code,
                 c.NOMECLI as customer_name,
                 c.CPF as customer_cpf,
                 c.CNPJ as customer_cnpj,
@@ -125,7 +126,7 @@ public class DatabaseService
             INNER JOIN CLIENTE c ON m.CODCLI = c.CODCLI
             LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
             WHERE m.CODCLI <> 3005
-            AND TRIM(m.CODTIPOMOVIMENTO) IN ({validMovementTypes})
+            AND m.VALORTOTALNOTA > 0
             {dateFilter}
             ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
 
@@ -170,14 +171,11 @@ public class DatabaseService
                     continue;
                 }
 
-                // Mapear código de tipo de movimento para categoria
-                var movementTypeCode = reader["movement_type_code"]?.ToString()?.Trim() ?? "";
-                var movementType = movementTypeCode switch
-                {
-                    "007" or "018" => "produto",
-                    "064" => "servico",
-                    _ => "produto" // fallback
-                };
+                // Tipo de movimento (produto/servico)
+                // Em alguns bancos CPlus o campo de tipo de movimento varia.
+                // Para garantir que as faturas sejam sincronizadas, usamos um default seguro.
+                var movementType = "produto";
+
 
                 var payload = new FaturaCriadaPayload
                 {
