@@ -580,9 +580,10 @@ Deno.serve(async (req) => {
     // Send WhatsApp notifications
     const whatsappPhoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
     const whatsappAccessToken = Deno.env.get('WHATSAPP_ACCESS_TOKEN');
-    const whatsappTemplateName = Deno.env.get('WHATSAPP_TEMPLATE_NAME');
+    const whatsappTemplateCustomer = Deno.env.get('WHATSAPP_TEMPLATE_NAME'); // Template para cliente
+    const whatsappTemplateSpecifier = Deno.env.get('WHATSAPP_TEMPLATE_SPECIFIER'); // Template para especificador
 
-    if (whatsappPhoneNumberId && whatsappAccessToken && whatsappTemplateName) {
+    if (whatsappPhoneNumberId && whatsappAccessToken) {
       // Helper to format phone number for WhatsApp
       const formatPhoneForWhatsApp = (phone: string | null | undefined): string | null => {
         if (!phone) return null;
@@ -598,7 +599,7 @@ Deno.serve(async (req) => {
       };
 
       // Helper to send WhatsApp message
-      const sendWhatsAppMessage = async (to: string, customerName: string, invoiceNumber: string, totalAmount: number, pendingPoints: number) => {
+      const sendWhatsAppMessage = async (to: string, templateName: string, recipientName: string, customerName: string, invoiceNumber: string, totalAmount: number, pendingPoints: number) => {
         try {
           const response = await fetch(
             `https://graph.facebook.com/v21.0/${whatsappPhoneNumberId}/messages`,
@@ -614,13 +615,14 @@ Deno.serve(async (req) => {
                 to: to,
                 type: 'template',
                 template: {
-                  name: whatsappTemplateName,
+                  name: templateName,
                   language: { code: 'pt_BR' },
                   components: [
                     {
                       type: 'body',
                       parameters: [
-                        { type: 'text', text: customerName.split(' ')[0] }, // First name
+                        { type: 'text', text: recipientName.split(' ')[0] }, // First name of recipient
+                        { type: 'text', text: customerName.split(' ')[0] }, // First name of customer (for specifier template)
                         { type: 'text', text: invoiceNumber },
                         { type: 'text', text: totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
                         { type: 'text', text: pendingPoints.toString() },
@@ -646,20 +648,24 @@ Deno.serve(async (req) => {
       };
 
       // Send to customer
-      const customerPhone = formatPhoneForWhatsApp(customer.phone);
-      if (customerPhone) {
-        console.log(`Sending WhatsApp notification to customer: ${customerPhone}`);
-        await sendWhatsAppMessage(customerPhone, customer.name, invoice_id_ext, total_amount, pendingCustomer);
+      if (whatsappTemplateCustomer) {
+        const customerPhone = formatPhoneForWhatsApp(customer.phone);
+        if (customerPhone) {
+          console.log(`Sending WhatsApp notification to customer: ${customerPhone}`);
+          await sendWhatsAppMessage(customerPhone, whatsappTemplateCustomer, customer.name, customer.name, invoice_id_ext, total_amount, pendingCustomer);
+        } else {
+          console.log('Customer phone not available or invalid for WhatsApp');
+        }
       } else {
-        console.log('Customer phone not available or invalid for WhatsApp');
+        console.log('Customer WhatsApp template not configured');
       }
 
       // Send to specifier if exists
-      if (specifier && specifierId && pendingSpecifier > 0) {
+      if (specifier && specifierId && pendingSpecifier > 0 && whatsappTemplateSpecifier) {
         const specifierPhone = formatPhoneForWhatsApp(specifier.phone);
         if (specifierPhone) {
           console.log(`Sending WhatsApp notification to specifier: ${specifierPhone}`);
-          await sendWhatsAppMessage(specifierPhone, specifier.name, invoice_id_ext, total_amount, pendingSpecifier);
+          await sendWhatsAppMessage(specifierPhone, whatsappTemplateSpecifier, specifier.name, customer.name, invoice_id_ext, total_amount, pendingSpecifier);
         } else {
           console.log('Specifier phone not available or invalid for WhatsApp');
         }
