@@ -635,6 +635,57 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_notifications: {
+        Row: {
+          created_at: string
+          error_message: string | null
+          id: string
+          invoice_id: string | null
+          invoice_id_ext: string | null
+          points: number | null
+          recipient_id: string | null
+          recipient_name: string
+          recipient_phone: string
+          recipient_type: string
+          status: string
+          template_name: string
+          total_amount: number | null
+          whatsapp_message_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          invoice_id?: string | null
+          invoice_id_ext?: string | null
+          points?: number | null
+          recipient_id?: string | null
+          recipient_name: string
+          recipient_phone: string
+          recipient_type: string
+          status?: string
+          template_name: string
+          total_amount?: number | null
+          whatsapp_message_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          invoice_id?: string | null
+          invoice_id_ext?: string | null
+          points?: number | null
+          recipient_id?: string | null
+          recipient_name?: string
+          recipient_phone?: string
+          recipient_type?: string
+          status?: string
+          template_name?: string
+          total_amount?: number | null
+          whatsapp_message_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

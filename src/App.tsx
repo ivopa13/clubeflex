@@ -28,6 +28,7 @@ import AdminPagamentos from "./pages/admin/AdminPagamentos";
 import AdminPerfil from "./pages/admin/AdminPerfil";
 import AdminGerenciarCadastros from "./pages/admin/AdminGerenciarCadastros";
 import AdminVendas from "./pages/admin/AdminVendas";
+import AdminWhatsAppNotifications from "./pages/admin/AdminWhatsAppNotifications";
 
 const queryClient = new QueryClient();
 
@@ -230,6 +231,16 @@ const App = () => (
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
                   <AdminPerfil />
+                </AdminLayout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/admin/whatsapp"
+            element={
+              <AuthGuard allowedRoles={["admin"]}>
+                <AdminLayout>
+                  <AdminWhatsAppNotifications />
                 </AdminLayout>
               </AuthGuard>
             }

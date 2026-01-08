@@ -598,8 +598,23 @@ Deno.serve(async (req) => {
         return cleaned;
       };
 
-      // Helper to send WhatsApp message
-      const sendWhatsAppMessage = async (to: string, templateName: string, recipientName: string, customerName: string, invoiceNumber: string, totalAmount: number, pendingPoints: number) => {
+      // Helper to send WhatsApp message and log to database
+      const sendWhatsAppMessage = async (
+        to: string, 
+        templateName: string, 
+        recipientType: 'customer' | 'specifier',
+        recipientId: string,
+        recipientName: string, 
+        customerName: string, 
+        invoiceNumber: string, 
+        invoiceId: string,
+        totalAmount: number, 
+        pendingPoints: number
+      ) => {
+        let status = 'sent';
+        let whatsappMessageId = null;
+        let errorMessage = null;
+
         try {
           const response = await fetch(
             `https://graph.facebook.com/v21.0/${whatsappPhoneNumberId}/messages`,
@@ -621,8 +636,8 @@ Deno.serve(async (req) => {
                     {
                       type: 'body',
                       parameters: [
-                        { type: 'text', text: recipientName.split(' ')[0] }, // First name of recipient
-                        { type: 'text', text: customerName.split(' ')[0] }, // First name of customer (for specifier template)
+                        { type: 'text', text: recipientName.split(' ')[0] },
+                        { type: 'text', text: customerName.split(' ')[0] },
                         { type: 'text', text: invoiceNumber },
                         { type: 'text', text: totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
                         { type: 'text', text: pendingPoints.toString() },
@@ -637,14 +652,39 @@ Deno.serve(async (req) => {
           const result = await response.json();
           if (!response.ok) {
             console.error(`WhatsApp API error for ${to}:`, result);
+            status = 'failed';
+            errorMessage = result.error?.message || JSON.stringify(result);
           } else {
             console.log(`WhatsApp message sent to ${to}:`, result);
+            whatsappMessageId = result.messages?.[0]?.id || null;
           }
-          return result;
         } catch (error) {
           console.error(`Error sending WhatsApp to ${to}:`, error);
-          return null;
+          status = 'failed';
+          errorMessage = error instanceof Error ? error.message : 'Unknown error';
         }
+
+        // Log notification to database
+        try {
+          await supabase.from('whatsapp_notifications').insert({
+            recipient_type: recipientType,
+            recipient_id: recipientId,
+            recipient_name: recipientName,
+            recipient_phone: to,
+            template_name: templateName,
+            invoice_id: invoiceId,
+            invoice_id_ext: invoiceNumber,
+            total_amount: totalAmount,
+            points: pendingPoints,
+            status,
+            whatsapp_message_id: whatsappMessageId,
+            error_message: errorMessage,
+          });
+        } catch (logError) {
+          console.error('Error logging WhatsApp notification:', logError);
+        }
+
+        return { status, whatsappMessageId, errorMessage };
       };
 
       // Send to customer
@@ -652,7 +692,18 @@ Deno.serve(async (req) => {
         const customerPhone = formatPhoneForWhatsApp(customer.phone);
         if (customerPhone) {
           console.log(`Sending WhatsApp notification to customer: ${customerPhone}`);
-          await sendWhatsAppMessage(customerPhone, whatsappTemplateCustomer, customer.name, customer.name, invoice_id_ext, total_amount, pendingCustomer);
+          await sendWhatsAppMessage(
+            customerPhone, 
+            whatsappTemplateCustomer, 
+            'customer',
+            customerData.id,
+            customer.name, 
+            customer.name, 
+            invoice_id_ext, 
+            newInvoice.id,
+            total_amount, 
+            pendingCustomer
+          );
         } else {
           console.log('Customer phone not available or invalid for WhatsApp');
         }
@@ -665,7 +716,18 @@ Deno.serve(async (req) => {
         const specifierPhone = formatPhoneForWhatsApp(specifier.phone);
         if (specifierPhone) {
           console.log(`Sending WhatsApp notification to specifier: ${specifierPhone}`);
-          await sendWhatsAppMessage(specifierPhone, whatsappTemplateSpecifier, specifier.name, customer.name, invoice_id_ext, total_amount, pendingSpecifier);
+          await sendWhatsAppMessage(
+            specifierPhone, 
+            whatsappTemplateSpecifier, 
+            'specifier',
+            specifierId,
+            specifier.name, 
+            customer.name, 
+            invoice_id_ext, 
+            newInvoice.id,
+            total_amount, 
+            pendingSpecifier
+          );
         } else {
           console.log('Specifier phone not available or invalid for WhatsApp');
         }
