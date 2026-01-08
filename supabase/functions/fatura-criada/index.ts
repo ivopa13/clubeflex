@@ -687,49 +687,65 @@ Deno.serve(async (req) => {
         return { status, whatsappMessageId, errorMessage };
       };
 
-      // Send to customer
+      // Helper to check if document is CPF (pessoa física)
+      const isPessoaFisica = (doc: string | null | undefined): boolean => {
+        if (!doc) return false;
+        const cleanDoc = doc.replace(/\D/g, '');
+        return cleanDoc.length === 11; // CPF has 11 digits
+      };
+
+      // Send to customer (only for pessoa física - CPF)
       if (whatsappTemplateCustomer) {
-        const customerPhone = formatPhoneForWhatsApp(customer.phone);
-        if (customerPhone) {
-          console.log(`Sending WhatsApp notification to customer: ${customerPhone}`);
-          await sendWhatsAppMessage(
-            customerPhone, 
-            whatsappTemplateCustomer, 
-            'customer',
-            customerData.id,
-            customer.name, 
-            customer.name, 
-            invoice_id_ext, 
-            newInvoice.id,
-            total_amount, 
-            pendingCustomer
-          );
+        if (isPessoaFisica(customerDocValidation.doc)) {
+          const customerPhone = formatPhoneForWhatsApp(customer.phone);
+          if (customerPhone) {
+            console.log(`Sending WhatsApp notification to customer (PF): ${customerPhone}`);
+            await sendWhatsAppMessage(
+              customerPhone, 
+              whatsappTemplateCustomer, 
+              'customer',
+              customerData.id,
+              customer.name, 
+              customer.name, 
+              invoice_id_ext, 
+              newInvoice.id,
+              total_amount, 
+              pendingCustomer
+            );
+          } else {
+            console.log('Customer phone not available or invalid for WhatsApp');
+          }
         } else {
-          console.log('Customer phone not available or invalid for WhatsApp');
+          console.log('Customer is pessoa jurídica (CNPJ) - WhatsApp notification skipped, email will be sent later');
         }
       } else {
         console.log('Customer WhatsApp template not configured');
       }
 
-      // Send to specifier if exists
+      // Send to specifier if exists (only for pessoa física - CPF)
       if (specifier && specifierId && pendingSpecifier > 0 && whatsappTemplateSpecifier) {
-        const specifierPhone = formatPhoneForWhatsApp(specifier.phone);
-        if (specifierPhone) {
-          console.log(`Sending WhatsApp notification to specifier: ${specifierPhone}`);
-          await sendWhatsAppMessage(
-            specifierPhone, 
-            whatsappTemplateSpecifier, 
-            'specifier',
-            specifierId,
-            specifier.name, 
-            customer.name, 
-            invoice_id_ext, 
-            newInvoice.id,
-            total_amount, 
-            pendingSpecifier
-          );
+        const specifierDoc = specifierDocValidation?.doc;
+        if (isPessoaFisica(specifierDoc)) {
+          const specifierPhone = formatPhoneForWhatsApp(specifier.phone);
+          if (specifierPhone) {
+            console.log(`Sending WhatsApp notification to specifier (PF): ${specifierPhone}`);
+            await sendWhatsAppMessage(
+              specifierPhone, 
+              whatsappTemplateSpecifier, 
+              'specifier',
+              specifierId,
+              specifier.name, 
+              customer.name, 
+              invoice_id_ext, 
+              newInvoice.id,
+              total_amount, 
+              pendingSpecifier
+            );
+          } else {
+            console.log('Specifier phone not available or invalid for WhatsApp');
+          }
         } else {
-          console.log('Specifier phone not available or invalid for WhatsApp');
+          console.log('Specifier is pessoa jurídica (CNPJ) - WhatsApp notification skipped, email will be sent later');
         }
       }
     } else {
