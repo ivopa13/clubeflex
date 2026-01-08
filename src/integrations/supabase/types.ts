@@ -691,6 +691,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      clean_phone_number: { Args: { raw_phone: string }; Returns: string }
       get_customer_id: { Args: { _user_id: string }; Returns: string }
       get_specifier_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
