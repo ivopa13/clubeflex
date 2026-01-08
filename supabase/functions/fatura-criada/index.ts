@@ -577,6 +577,97 @@ Deno.serve(async (req) => {
 
     console.log(`Invoice ${invoice_id_ext} processed successfully`);
 
+    // Send WhatsApp notifications
+    const whatsappPhoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
+    const whatsappAccessToken = Deno.env.get('WHATSAPP_ACCESS_TOKEN');
+    const whatsappTemplateName = Deno.env.get('WHATSAPP_TEMPLATE_NAME');
+
+    if (whatsappPhoneNumberId && whatsappAccessToken && whatsappTemplateName) {
+      // Helper to format phone number for WhatsApp
+      const formatPhoneForWhatsApp = (phone: string | null | undefined): string | null => {
+        if (!phone) return null;
+        // Remove all non-digits
+        let cleaned = phone.replace(/\D/g, '');
+        // If starts with 0, remove it
+        if (cleaned.startsWith('0')) cleaned = cleaned.substring(1);
+        // Add Brazil country code if not present
+        if (!cleaned.startsWith('55')) cleaned = '55' + cleaned;
+        // WhatsApp requires at least 12 digits for Brazil (55 + DDD + number)
+        if (cleaned.length < 12) return null;
+        return cleaned;
+      };
+
+      // Helper to send WhatsApp message
+      const sendWhatsAppMessage = async (to: string, customerName: string, invoiceNumber: string, totalAmount: number, pendingPoints: number) => {
+        try {
+          const response = await fetch(
+            `https://graph.facebook.com/v21.0/${whatsappPhoneNumberId}/messages`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${whatsappAccessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: to,
+                type: 'template',
+                template: {
+                  name: whatsappTemplateName,
+                  language: { code: 'pt_BR' },
+                  components: [
+                    {
+                      type: 'body',
+                      parameters: [
+                        { type: 'text', text: customerName.split(' ')[0] }, // First name
+                        { type: 'text', text: invoiceNumber },
+                        { type: 'text', text: totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+                        { type: 'text', text: pendingPoints.toString() },
+                      ],
+                    },
+                  ],
+                },
+              }),
+            }
+          );
+
+          const result = await response.json();
+          if (!response.ok) {
+            console.error(`WhatsApp API error for ${to}:`, result);
+          } else {
+            console.log(`WhatsApp message sent to ${to}:`, result);
+          }
+          return result;
+        } catch (error) {
+          console.error(`Error sending WhatsApp to ${to}:`, error);
+          return null;
+        }
+      };
+
+      // Send to customer
+      const customerPhone = formatPhoneForWhatsApp(customer.phone);
+      if (customerPhone) {
+        console.log(`Sending WhatsApp notification to customer: ${customerPhone}`);
+        await sendWhatsAppMessage(customerPhone, customer.name, invoice_id_ext, total_amount, pendingCustomer);
+      } else {
+        console.log('Customer phone not available or invalid for WhatsApp');
+      }
+
+      // Send to specifier if exists
+      if (specifier && specifierId && pendingSpecifier > 0) {
+        const specifierPhone = formatPhoneForWhatsApp(specifier.phone);
+        if (specifierPhone) {
+          console.log(`Sending WhatsApp notification to specifier: ${specifierPhone}`);
+          await sendWhatsAppMessage(specifierPhone, specifier.name, invoice_id_ext, total_amount, pendingSpecifier);
+        } else {
+          console.log('Specifier phone not available or invalid for WhatsApp');
+        }
+      }
+    } else {
+      console.log('WhatsApp credentials not configured, skipping notifications');
+    }
+
     return new Response(
       JSON.stringify({ 
         ok: true, 
