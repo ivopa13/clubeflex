@@ -49,6 +49,7 @@ const AdminGerenciarCadastros = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [linkedFilter, setLinkedFilter] = useState<string>("all");
+  const [personTypeFilter, setPersonTypeFilter] = useState<string>("all");
   const [creatingUserId, setCreatingUserId] = useState<string | null>(null);
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
@@ -61,6 +62,11 @@ const AdminGerenciarCadastros = () => {
     id: null,
     data: { name: "", email: "", phone: "" },
   });
+
+  const getPersonType = (doc: string): "PF" | "PJ" => {
+    const cleaned = doc.replace(/\D/g, "");
+    return cleaned.length === 11 ? "PF" : "PJ";
+  };
 
   const { data: customers, isLoading: loadingCustomers } = useQuery({
     queryKey: ["admin-customers"],
@@ -213,9 +219,30 @@ const AdminGerenciarCadastros = () => {
       if (linkedFilter === "yes" && !item.user_id) return false;
       if (linkedFilter === "no" && item.user_id) return false;
 
+      // Filtro de tipo de pessoa (PF/PJ)
+      if (personTypeFilter !== "all") {
+        const itemPersonType = getPersonType(item.doc);
+        if (itemPersonType !== personTypeFilter) return false;
+      }
+
       return true;
     });
   };
+
+  const countByPersonType = (items: Customer[] | Specifier[] | undefined) => {
+    if (!items) return { pf: 0, pj: 0 };
+    return items.reduce(
+      (acc, item) => {
+        if (getPersonType(item.doc) === "PF") acc.pf++;
+        else acc.pj++;
+        return acc;
+      },
+      { pf: 0, pj: 0 }
+    );
+  };
+
+  const customerCounts = countByPersonType(customers);
+  const specifierCounts = countByPersonType(specifiers);
 
   const filteredCustomers = filterItems(customers);
   const filteredSpecifiers = filterItems(specifiers);
@@ -261,6 +288,17 @@ const AdminGerenciarCadastros = () => {
             <SelectItem value="no">Não Vinculado</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={personTypeFilter} onValueChange={setPersonTypeFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Tipo Pessoa" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">PF e PJ</SelectItem>
+            <SelectItem value="PF">Pessoa Física</SelectItem>
+            <SelectItem value="PJ">Pessoa Jurídica</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Tabs defaultValue="customers" className="space-y-4">
@@ -274,7 +312,12 @@ const AdminGerenciarCadastros = () => {
             <CardHeader>
               <CardTitle>Clientes Cadastrados</CardTitle>
               <CardDescription>
-                {searchTerm ? `${filteredCustomers.length} de ${customers?.length || 0}` : `${customers?.length || 0}`} clientes
+                {searchTerm || personTypeFilter !== "all" 
+                  ? `${filteredCustomers.length} de ${customers?.length || 0}` 
+                  : `${customers?.length || 0}`} clientes
+                <span className="ml-2 text-xs">
+                  ({customerCounts.pf} PF | {customerCounts.pj} PJ)
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -290,6 +333,7 @@ const AdminGerenciarCadastros = () => {
                         <TableHead>ID Ext</TableHead>
                         <TableHead>Nome</TableHead>
                         <TableHead>CPF/CNPJ</TableHead>
+                        <TableHead>Tipo</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Telefone</TableHead>
                         <TableHead>Status</TableHead>
@@ -303,6 +347,11 @@ const AdminGerenciarCadastros = () => {
                           <TableCell className="font-mono text-sm">{customer.customer_id_ext}</TableCell>
                           <TableCell className="font-medium">{customer.name}</TableCell>
                           <TableCell className="font-mono text-sm">{formatDoc(customer.doc)}</TableCell>
+                          <TableCell>
+                            <Badge variant={getPersonType(customer.doc) === "PF" ? "default" : "secondary"}>
+                              {getPersonType(customer.doc)}
+                            </Badge>
+                          </TableCell>
                           <TableCell>{customer.email || "-"}</TableCell>
                           <TableCell>{customer.phone || "-"}</TableCell>
                           <TableCell>
@@ -358,7 +407,12 @@ const AdminGerenciarCadastros = () => {
             <CardHeader>
               <CardTitle>Especificadores Cadastrados</CardTitle>
               <CardDescription>
-                {searchTerm ? `${filteredSpecifiers.length} de ${specifiers?.length || 0}` : `${specifiers?.length || 0}`} especificadores
+                {searchTerm || personTypeFilter !== "all"
+                  ? `${filteredSpecifiers.length} de ${specifiers?.length || 0}`
+                  : `${specifiers?.length || 0}`} especificadores
+                <span className="ml-2 text-xs">
+                  ({specifierCounts.pf} PF | {specifierCounts.pj} PJ)
+                </span>
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -374,9 +428,10 @@ const AdminGerenciarCadastros = () => {
                         <TableHead>ID Ext</TableHead>
                         <TableHead>Nome</TableHead>
                         <TableHead>CPF/CNPJ</TableHead>
+                        <TableHead>PF/PJ</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Telefone</TableHead>
-                        <TableHead>Tipo</TableHead>
+                        <TableHead>Função</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Vinculado</TableHead>
                         <TableHead>Ações</TableHead>
@@ -388,10 +443,15 @@ const AdminGerenciarCadastros = () => {
                           <TableCell className="font-mono text-sm">{specifier.specifier_id_ext}</TableCell>
                           <TableCell className="font-medium">{specifier.name}</TableCell>
                           <TableCell className="font-mono text-sm">{formatDoc(specifier.doc)}</TableCell>
+                          <TableCell>
+                            <Badge variant={getPersonType(specifier.doc) === "PF" ? "default" : "secondary"}>
+                              {getPersonType(specifier.doc)}
+                            </Badge>
+                          </TableCell>
                           <TableCell>{specifier.email || "-"}</TableCell>
                           <TableCell>{specifier.phone || "-"}</TableCell>
                           <TableCell>
-                            <Badge variant="secondary">{specifier.role}</Badge>
+                            <Badge variant="outline">{specifier.role}</Badge>
                           </TableCell>
                           <TableCell>
                             <Badge variant={specifier.status === "active" ? "default" : "secondary"}>
