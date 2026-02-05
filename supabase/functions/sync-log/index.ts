@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,9 +16,8 @@ interface SyncLogPayload {
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
@@ -28,14 +27,8 @@ Deno.serve(async (req) => {
     );
 
     const body: SyncLogPayload = await req.json();
+    console.log('Sync log:', body.event_id, body.event_type, body.status);
 
-    console.log('Recebendo log de sincronização:', {
-      event_id: body.event_id,
-      event_type: body.event_type,
-      status: body.status,
-    });
-
-    // Validar dados obrigatórios
     if (!body.event_id || !body.event_type || !body.status) {
       return new Response(
         JSON.stringify({ error: 'event_id, event_type e status são obrigatórios' }),
@@ -43,46 +36,37 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Inserir ou atualizar log
     const { data, error } = await supabase
       .from('sync_logs')
-      .upsert(
-        {
-          event_id: body.event_id,
-          event_type: body.event_type,
-          status: body.status,
-          payload: body.payload || null,
-          error_message: body.error_message || null,
-          attempts: body.attempts || 0,
-          execution_id: body.execution_id || null,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'event_id,event_type',
-        }
-      )
+      .upsert({
+        event_id: body.event_id,
+        event_type: body.event_type,
+        status: body.status,
+        payload: body.payload || null,
+        error_message: body.error_message || null,
+        attempts: body.attempts || 0,
+        execution_id: body.execution_id || null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'event_id,event_type' })
       .select()
       .single();
 
     if (error) {
-      console.error('Erro ao salvar log:', error);
+      console.error('Erro:', error);
       return new Response(
         JSON.stringify({ error: error.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Log salvo com sucesso:', data.id);
-
     return new Response(
       JSON.stringify({ success: true, id: data.id }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Erro não tratado:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('Erro:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

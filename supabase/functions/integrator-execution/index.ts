@@ -1,30 +1,11 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface StartExecutionPayload {
-  action: 'start';
-  execution_id: string;
-}
-
-interface FinishExecutionPayload {
-  action: 'finish';
-  execution_id: string;
-  status: 'completed' | 'completed_with_errors' | 'failed';
-  total_events?: number;
-  success_count?: number;
-  error_count?: number;
-  invoice_count?: number;
-  payment_count?: number;
-}
-
-type ExecutionPayload = StartExecutionPayload | FinishExecutionPayload;
-
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -35,12 +16,10 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const body: ExecutionPayload = await req.json();
-
-    console.log('Recebendo requisição de execução:', JSON.stringify(body));
+    const body = await req.json();
+    console.log('Recebendo requisição:', JSON.stringify(body));
 
     if (!body.execution_id || !body.action) {
-      console.error('Campos obrigatórios ausentes');
       return new Response(
         JSON.stringify({ error: 'execution_id e action são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -48,9 +27,6 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === 'start') {
-      console.log('Iniciando nova execução:', body.execution_id);
-      
-      // Create new execution record
       const { data, error } = await supabase
         .from('integrator_executions')
         .insert({
@@ -69,22 +45,19 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log('Execução iniciada com sucesso:', data.id);
-
+      console.log('Execução iniciada:', data.id);
       return new Response(
         JSON.stringify({ success: true, id: data.id, execution_id: body.execution_id }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    } else if (body.action === 'finish') {
-      console.log('Finalizando execução:', body.execution_id);
-      
-      // Determine final status
+    } 
+    
+    if (body.action === 'finish') {
       let finalStatus = body.status;
       if (finalStatus === 'completed' && (body.error_count ?? 0) > 0) {
         finalStatus = 'completed_with_errors';
       }
 
-      // Update execution with final stats
       const { data, error } = await supabase
         .from('integrator_executions')
         .update({
@@ -108,8 +81,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log('Execução finalizada com sucesso:', data.id, 'status:', finalStatus);
-
+      console.log('Execução finalizada:', data.id, 'status:', finalStatus);
       return new Response(
         JSON.stringify({ success: true, id: data.id }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -121,10 +93,9 @@ Deno.serve(async (req) => {
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Erro não tratado:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    console.error('Erro:', error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Erro desconhecido' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
