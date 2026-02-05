@@ -91,8 +91,9 @@ public class DatabaseService
 
     /// <summary>
     /// Busca novas faturas que ainda não foram sincronizadas com sucesso
+    /// Usa checksum para detectar alterações e evitar sincronização desnecessária
     /// </summary>
-    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
+    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
     {
         var invoices = new List<FaturaCriadaPayload>();
 
@@ -105,7 +106,7 @@ public class DatabaseService
         // Para NÃO perder faturas, a regra aqui é simples:
         // - somente vendas com valor > 0
         // - respeitando o recorte por data (fromDate)
-        // - e a filtragem por event_id já sincronizado (syncedEventIds)
+        // - e a filtragem por checksum (se já sincronizado e inalterado)
 
         var query = $@"
             SELECT FIRST {batchSize}
@@ -130,6 +131,8 @@ public class DatabaseService
             {dateFilter}
             ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
 
+        int skippedByChecksum = 0;
+
         try
         {
             using var connection = new FbConnection(_connectionString);
@@ -142,13 +145,6 @@ public class DatabaseService
             {
                 var invoiceId = reader["invoice_id"].ToString() ?? "";
                 var eventId = $"FAT_{invoiceId}";
-
-                // Pular se já foi sincronizado
-                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
-                {
-                    Log.Debug($"⏭️  Pulando fatura {invoiceId} - já sincronizada");
-                    continue;
-                }
 
                 var orderNumber = reader.IsDBNull(reader.GetOrdinal("order_number")) 
                     ? null 
@@ -225,10 +221,33 @@ public class DatabaseService
                     };
                 }
 
+                // Calcular checksum
+                payload.CalculateChecksum();
+
+                // Comparar com checksum existente - se igual, pular
+                if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
+                {
+                    if (existingChecksum == payload.Checksum)
+                    {
+                        Log.Debug($"⏭️ Fatura {invoiceId} sem alterações (checksum igual)");
+                        skippedByChecksum++;
+                        continue;
+                    }
+                    else
+                    {
+                        Log.Debug($"🔄 Fatura {invoiceId} alterada - checksum anterior: {existingChecksum}, novo: {payload.Checksum}");
+                    }
+                }
+
                 invoices.Add(payload);
             }
 
-            Log.Information($"Encontradas {invoices.Count} novas faturas para sincronizar");
+            Log.Information($"📋 Encontradas {invoices.Count} faturas novas/alteradas para sincronizar");
+            
+            if (skippedByChecksum > 0)
+            {
+                Log.Information($"⏭️ {skippedByChecksum} faturas puladas (sem alterações - checksum igual)");
+            }
         }
         catch (Exception ex)
         {
@@ -315,8 +334,9 @@ public class DatabaseService
     /// <summary>
     /// Busca novos pagamentos confirmados que ainda não foram sincronizados
     /// Inclui o CODREC para identificar o tipo real de pagamento
+    /// Usa checksum para detectar alterações
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
+    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
     {
         var payments = new List<PagamentoPayload>();
 
@@ -337,6 +357,8 @@ public class DatabaseService
             {dateFilter}
             ORDER BY crr.DATA DESC, crr.ID DESC";
 
+        int skippedByChecksum = 0;
+
         try
         {
             using var connection = new FbConnection(_connectionString);
@@ -349,13 +371,6 @@ public class DatabaseService
             {
                 var paymentId = reader["payment_id"].ToString() ?? "";
                 var eventId = $"PAG_{paymentId}";
-
-                // Pular se já foi sincronizado
-                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
-                {
-                    Log.Debug($"⏭️  Pulando pagamento {paymentId} - já sincronizado");
-                    continue;
-                }
 
                 var paymentTypeCode = reader["payment_type_code"]?.ToString();
                 var mappedType = MapPaymentTypeCode(paymentTypeCode);
@@ -377,12 +392,31 @@ public class DatabaseService
                     PaymentType = mappedType
                 };
 
+                // Calcular checksum
+                payload.CalculateChecksum();
+
+                // Comparar com checksum existente - se igual, pular
+                if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
+                {
+                    if (existingChecksum == payload.Checksum)
+                    {
+                        Log.Debug($"⏭️ Pagamento {paymentId} sem alterações (checksum igual)");
+                        skippedByChecksum++;
+                        continue;
+                    }
+                }
+
                 payments.Add(payload);
                 
                 Log.Debug($"Pagamento encontrado: {eventId} - Código: {paymentTypeCode} -> Tipo: {mappedType} - Valor: {payload.PaidAmount}");
             }
 
-            Log.Information($"Encontrados {payments.Count} novos pagamentos para sincronizar");
+            Log.Information($"📋 Encontrados {payments.Count} pagamentos novos/alterados para sincronizar");
+            
+            if (skippedByChecksum > 0)
+            {
+                Log.Information($"⏭️ {skippedByChecksum} pagamentos pulados (sem alterações - checksum igual)");
+            }
         }
         catch (Exception ex)
         {
@@ -396,8 +430,9 @@ public class DatabaseService
     /// <summary>
     /// Busca pagamentos à vista (MOVENDAREC) que foram quitados imediatamente
     /// Exclui apenas: Carnê, A Prazo (carteira) e Promissória (serão tratados separadamente)
+    /// Usa checksum para detectar alterações
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
+    public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
     {
         var payments = new List<PagamentoPayload>();
 
@@ -427,6 +462,8 @@ public class DatabaseService
             AND TRIM(r.CODREC) NOT IN ({excludedCodes})
             ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
 
+        int skippedByChecksum = 0;
+
         try
         {
             using var connection = new FbConnection(_connectionString);
@@ -441,13 +478,6 @@ public class DatabaseService
                 var paymentCode = reader["payment_code"].ToString() ?? "";
                 var eventId = $"PAG_VISTA_{invoiceId}_{paymentCode}";
                 var paymentTypeName = reader["payment_type"].ToString() ?? "";
-
-                // Pular se já foi sincronizado
-                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
-                {
-                    Log.Debug($"⏭️  Pulando pagamento à vista {eventId} - já sincronizado");
-                    continue;
-                }
 
                 // Usar o método centralizado de mapeamento
                 var mappedType = MapPaymentTypeCode(paymentCode);
@@ -469,12 +499,31 @@ public class DatabaseService
                     PaymentType = mappedType
                 };
 
+                // Calcular checksum
+                payload.CalculateChecksum();
+
+                // Comparar com checksum existente - se igual, pular
+                if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
+                {
+                    if (existingChecksum == payload.Checksum)
+                    {
+                        Log.Debug($"⏭️ Pagamento à vista {eventId} sem alterações (checksum igual)");
+                        skippedByChecksum++;
+                        continue;
+                    }
+                }
+
                 payments.Add(payload);
                 
                 Log.Debug($"Pagamento à vista encontrado: {eventId} - Tipo: {paymentTypeName} (Código: {paymentCode} -> {mappedType}) - Fatura: {invoiceId} - Valor: {payload.PaidAmount}");
             }
 
-            Log.Information($"Encontrados {payments.Count} novos pagamentos à vista para sincronizar");
+            Log.Information($"📋 Encontrados {payments.Count} pagamentos à vista novos/alterados para sincronizar");
+            
+            if (skippedByChecksum > 0)
+            {
+                Log.Information($"⏭️ {skippedByChecksum} pagamentos à vista pulados (sem alterações - checksum igual)");
+            }
         }
         catch (Exception ex)
         {
@@ -487,8 +536,9 @@ public class DatabaseService
 
     /// <summary>
     /// Busca cheques compensados (depositados e não devolvidos)
+    /// Usa checksum para detectar alterações
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetClearedChecksAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
+    public async Task<List<PagamentoPayload>> GetClearedChecksAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
     {
         var checks = new List<PagamentoPayload>();
 
@@ -512,6 +562,8 @@ public class DatabaseService
                 {dateFilter}
             ORDER BY c.DEPOSITO DESC";
 
+        int skippedByChecksum = 0;
+
         try
         {
             using var connection = new FbConnection(_connectionString);
@@ -526,13 +578,6 @@ public class DatabaseService
                 var checkNumber = reader["check_number"].ToString() ?? "";
                 var bank = reader["bank"].ToString() ?? "";
                 var eventId = $"CHQ_{invoiceId}_{checkNumber}";
-
-                // Pular se já foi sincronizado
-                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
-                {
-                    Log.Debug($"⏭️  Pulando cheque {eventId} - já sincronizado");
-                    continue;
-                }
 
                 // Usar conversão segura de data - CRÍTICO para cheques
                 var rawDate = reader["paid_at"];
@@ -554,12 +599,31 @@ public class DatabaseService
                     PaymentType = "check" // Cheques compensados
                 };
 
+                // Calcular checksum
+                payload.CalculateChecksum();
+
+                // Comparar com checksum existente - se igual, pular
+                if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
+                {
+                    if (existingChecksum == payload.Checksum)
+                    {
+                        Log.Debug($"⏭️ Cheque {eventId} sem alterações (checksum igual)");
+                        skippedByChecksum++;
+                        continue;
+                    }
+                }
+
                 checks.Add(payload);
                 
                 Log.Debug($"✅ Cheque compensado: {eventId} - Banco: {bank} - Fatura: {invoiceId} - Valor: {payload.PaidAmount:C} - Data: {paidAt.Value:yyyy-MM-dd}");
             }
 
-            Log.Information($"Encontrados {checks.Count} cheques compensados para sincronizar");
+            Log.Information($"📋 Encontrados {checks.Count} cheques compensados novos/alterados para sincronizar");
+            
+            if (skippedByChecksum > 0)
+            {
+                Log.Information($"⏭️ {skippedByChecksum} cheques pulados (sem alterações - checksum igual)");
+            }
         }
         catch (Exception ex)
         {

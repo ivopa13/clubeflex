@@ -235,6 +235,7 @@ public class SyncService
 
     /// <summary>
     /// Sincroniza faturas para um projeto específico
+    /// Usa checksum para detectar alterações e evitar reenvio desnecessário
     /// </summary>
     private async Task SyncInvoicesForProjectAsync(
         ProjectConfig project, 
@@ -246,17 +247,18 @@ public class SyncService
         
         try
         {
-            var syncedInvoices = await syncLogService.GetSuccessfulEventIdsAsync("fatura");
+            // Buscar checksums existentes para comparação (em vez de apenas event_ids)
+            var existingChecksums = await syncLogService.GetInvoiceChecksumsAsync();
             var limit = _testMode ? _testModeLimit : (int?)null;
-            var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate, syncedInvoices);
+            var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate, existingChecksums);
 
             if (invoices.Count == 0)
             {
-                Log.Information($"[{project.Name}] Nenhuma fatura nova para sincronizar");
+                Log.Information($"[{project.Name}] Nenhuma fatura nova ou alterada para sincronizar");
                 return;
             }
 
-            Log.Information($"[{project.Name}] Encontradas {invoices.Count} novas faturas");
+            Log.Information($"[{project.Name}] Encontradas {invoices.Count} faturas novas/alteradas");
 
             foreach (var invoice in invoices)
             {
@@ -295,6 +297,7 @@ public class SyncService
 
     /// <summary>
     /// Sincroniza pagamentos para um projeto específico
+    /// Usa checksum para detectar alterações e evitar reenvio desnecessário
     /// </summary>
     private async Task SyncPaymentsForProjectAsync(
         ProjectConfig project, 
@@ -306,23 +309,24 @@ public class SyncService
         
         try
         {
-            var syncedPayments = await syncLogService.GetSuccessfulEventIdsAsync("pagamento");
+            // Buscar checksums existentes para comparação (em vez de apenas event_ids)
+            var existingChecksums = await syncLogService.GetPaymentChecksumsAsync();
             var limit = _testMode ? _testModeLimit : (int?)null;
             
-            // Buscar todos os tipos de pagamento
-            var creditPayments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate, syncedPayments);
-            var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate, syncedPayments);
-            var clearedChecks = await _databaseService.GetClearedChecksAsync(limit, _syncFromDate, syncedPayments);
+            // Buscar todos os tipos de pagamento usando checksums
+            var creditPayments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate, existingChecksums);
+            var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate, existingChecksums);
+            var clearedChecks = await _databaseService.GetClearedChecksAsync(limit, _syncFromDate, existingChecksums);
             
             var allPayments = creditPayments.Concat(cashPayments).Concat(clearedChecks).ToList();
 
             if (allPayments.Count == 0)
             {
-                Log.Information($"[{project.Name}] Nenhum pagamento novo para sincronizar");
+                Log.Information($"[{project.Name}] Nenhum pagamento novo ou alterado para sincronizar");
                 return;
             }
 
-            Log.Information($"[{project.Name}] 📊 Total de pagamentos: {allPayments.Count}");
+            Log.Information($"[{project.Name}] 📊 Total de pagamentos novos/alterados: {allPayments.Count}");
             Log.Information($"[{project.Name}]    - A prazo: {creditPayments.Count}");
             Log.Information($"[{project.Name}]    - À vista: {cashPayments.Count}");
             Log.Information($"[{project.Name}]    - Cheques: {clearedChecks.Count}");
