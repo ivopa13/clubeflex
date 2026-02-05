@@ -1,38 +1,42 @@
+# Integrador Multi-Projeto - Implementação Concluída ✅
 
-# Analise: Compartilhar Integrador entre Projetos
+## Status: IMPLEMENTADO
 
-## Contexto Atual
-
-O integrador C# (`ClubeFlex.Integrador`) atualmente:
-
-1. **Le do banco Firebird (CPlus)** - Tabelas: MOVENDA, CLIENTE, TRANSPORTADORA, CONTARECEBERREC, MOVENDAREC, CHEQUES
-2. **Envia para Lovable Cloud** - Edge Functions: `fatura-criada`, `pagamento-confirmado`, `sync-log`, `integrator-execution`
-3. **Configuracao fixa** - `appsettings.json` aponta para um unico projeto Supabase
+O integrador C# (`ClubeFlex.Integrador`) foi atualizado para v2.0 com suporte a múltiplos projetos Lovable simultaneamente.
 
 ---
 
-## Opcoes de Arquitetura
+## Arquivos Criados
 
-### Opcao A: Integrador Unico com Multiplos Destinos (RECOMENDADA)
+| Arquivo | Descrição |
+|---------|-----------|
+| `Models/ProjectConfig.cs` | Configuração por projeto (Name, BaseUrl, ApiKey, flags de sync) |
+| `Models/TituloPayload.cs` | Payload para títulos a receber (CONTARECEBER) |
+| `Services/ProjectApiService.cs` | Serviço de API genérico por projeto |
+| `Services/ProjectSyncLogService.cs` | Serviço de logs por projeto |
 
-Modificar o integrador para enviar dados para multiplos projetos Lovable simultaneamente.
+## Arquivos Modificados
 
-**Vantagens:**
-- Uma unica instalacao no servidor Windows
-- Compartilha a conexao com o banco Firebird
-- Cada projeto recebe apenas os dados relevantes
+| Arquivo | Mudanças |
+|---------|----------|
+| `appsettings.json` | Novo formato com array `Projects[]` |
+| `Services/DatabaseService.cs` | Adicionado `GetReceivablesAsync()` para CONTARECEBER |
+| `Services/SyncService.cs` | Refatorado completamente para multi-projeto |
+| `Program.cs` | Atualizado para v2.0 |
+| `README.md` | Documentação atualizada |
 
-**Estrutura proposta no `appsettings.json`:**
+---
+
+## Como Funciona
+
+### Configuração Multi-Projeto
 
 ```json
 {
-  "ConnectionStrings": {
-    "LocalDatabase": "DataSource=localhost;Database=..."
-  },
   "Projects": [
     {
       "Name": "ClubeFlex",
-      "BaseUrl": "https://skhljdaqfzweshjrlcnn.supabase.co/functions/v1",
+      "BaseUrl": "https://xxx.supabase.co/functions/v1",
       "ApiKey": "...",
       "SyncInvoices": true,
       "SyncPayments": true,
@@ -40,7 +44,7 @@ Modificar o integrador para enviar dados para multiplos projetos Lovable simulta
     },
     {
       "Name": "SistemaCobrancas",
-      "BaseUrl": "https://NOVO_PROJETO.supabase.co/functions/v1",
+      "BaseUrl": "https://yyy.supabase.co/functions/v1",
       "ApiKey": "...",
       "SyncInvoices": false,
       "SyncPayments": false,
@@ -50,129 +54,94 @@ Modificar o integrador para enviar dados para multiplos projetos Lovable simulta
 }
 ```
 
----
+### Opções de Sincronização
 
-### Opcao B: Integradores Separados
+| Flag | Descrição | Tabelas CPlus |
+|------|-----------|---------------|
+| `SyncInvoices` | Faturas/vendas | MOVENDA, CLIENTE, TRANSPORTADORA |
+| `SyncPayments` | Pagamentos | CONTARECEBERREC, MOVENDAREC, CHEQUES |
+| `SyncReceivables` | Títulos a receber | CONTARECEBER, CLIENTE |
 
-Duplicar o projeto do integrador para cada sistema.
+### Fluxo de Execução
 
-**Desvantagens:**
-- Multiplas conexoes ao mesmo banco Firebird
-- Manutencao duplicada
-- Maior consumo de recursos
-
----
-
-## Tabela CONTARECEBER - Estrutura Tipica no CPlus
-
-A tabela `CONTARECEBER` armazena titulos a receber (contas pendentes). Estrutura comum:
-
-| Coluna | Tipo | Descricao |
-|--------|------|-----------|
-| CODCR | INTEGER | ID unico do titulo |
-| CODMOVENDA | INTEGER | FK para MOVENDA (venda que gerou) |
-| CODCLI | INTEGER | FK para CLIENTE |
-| VALOR | DECIMAL | Valor do titulo |
-| VENCIMENTO | DATE | Data de vencimento |
-| DATAPAGTO | DATE | Data de pagamento (se pago) |
-| SITUACAO | CHAR | Situacao (A=Aberto, P=Pago, C=Cancelado) |
-| PARCELA | INTEGER | Numero da parcela |
-| TOTALPARCELAS | INTEGER | Total de parcelas |
-
-**Ja usamos `CONTARECEBERREC`** (que sao os recebimentos/baixas de CONTARECEBER) para pagamentos a prazo.
+```
+1. Carrega configurações
+2. Para cada projeto válido:
+   a. Testa conectividade com API
+   b. Inicia rastreamento de execução
+   c. Se SyncInvoices → sincroniza MOVENDA
+   d. Se SyncPayments → sincroniza CONTARECEBERREC + MOVENDAREC + CHEQUES
+   e. Se SyncReceivables → sincroniza CONTARECEBER
+   f. Finaliza execução com estatísticas
+3. Gera logs consolidados
+```
 
 ---
 
-## Plano de Implementacao
+## Próximos Passos para Novo Projeto
 
-### Fase 1: Novo Projeto Lovable (Sistema de Cobrancas)
+1. **Criar novo projeto Lovable** para Sistema de Cobranças
+2. **Configurar tabelas** no novo projeto:
+   - `customers` (mesma estrutura)
+   - `receivables` (títulos a receber)
+   - `receivable_payments` (pagamentos de títulos)
+3. **Criar Edge Functions** no novo projeto:
+   - `titulo-criado` - Recebe títulos do ERP
+   - `titulo-pago` - Recebe confirmação de pagamento
+   - `sync-log` - Logs de sincronização
+   - `integrator-execution` - Rastreamento de execuções
+4. **Atualizar appsettings.json** com os dados do novo projeto
+5. **Testar sincronização** em paralelo
 
-1. Criar novo projeto no Lovable
-2. Configurar tabelas especificas:
-   - `receivables` (contas a receber)
-   - `receivable_payments` (pagamentos)
-   - `customers` (pode compartilhar estrutura)
-   
-3. Criar Edge Functions:
-   - `titulo-criado` - Recebe novos titulos
-   - `titulo-pago` - Recebe confirmacao de pagamento
-   - `titulo-vencido` - Recebe notificacao de vencimento
+---
 
-### Fase 2: Adaptar Integrador
+## Estrutura do Payload de Títulos (TituloPayload)
 
-Adicionar no `DatabaseService.cs`:
-
-```csharp
-// Nova consulta para CONTARECEBER
-public async Task<List<TituloPayload>> GetReceivablesAsync(...)
+```json
 {
-    var query = @"
-        SELECT 
-            cr.CODCR as receivable_id,
-            cr.CODMOVENDA as invoice_id,
-            cr.CODCLI as customer_id,
-            c.NOMECLI as customer_name,
-            c.CPF as customer_cpf,
-            c.CNPJ as customer_cnpj,
-            c.TELEFONE as customer_phone,
-            cr.VALOR as amount,
-            cr.VENCIMENTO as due_date,
-            cr.PARCELA as installment_number,
-            cr.TOTALPARCELAS as total_installments,
-            cr.SITUACAO as status
-        FROM CONTARECEBER cr
-        INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
-        WHERE cr.SITUACAO = 'A'
-        AND cr.VENCIMENTO >= '{fromDate:yyyy-MM-dd}'
-        ORDER BY cr.VENCIMENTO ASC";
-    // ...
+  "event_id": "TIT_98765",
+  "source": "erp_windows",
+  "receivable_id_ext": "98765",
+  "invoice_id_ext": "12345",
+  "amount": 500.00,
+  "paid_amount": 0.00,
+  "balance": 500.00,
+  "due_date": "2025-02-15",
+  "issued_at": "2025-01-15",
+  "installment_number": 1,
+  "total_installments": 3,
+  "status": "A",
+  "days_overdue": 0,
+  "is_overdue": false,
+  "customer": {
+    "id_ext": "C001",
+    "name": "João Silva",
+    "cpf": "12345678900",
+    "phone": "(19) 99999-9999"
+  }
 }
 ```
 
-### Fase 3: Estrutura Multi-Projeto
+---
 
-1. Criar interface `IProjectSync` para abstrair envio
-2. Modificar `SyncService` para iterar projetos configurados
-3. Cada projeto recebe apenas os eventos que precisa
+## Compatibilidade
+
+O integrador mantém compatibilidade com a configuração legada:
+
+```json
+{
+  "ClubeFlexApi": {
+    "BaseUrl": "...",
+    "ApiKey": "..."
+  }
+}
+```
+
+Se não houver `Projects[]`, o sistema usa `ClubeFlexApi` como projeto único com `SyncInvoices=true` e `SyncPayments=true`.
 
 ---
 
-## Decisoes Necessarias
-
-Antes de comecar, precisamos definir:
-
-1. **Nome do novo projeto** - Ex: "Cobranca Flex", "Contas a Receber"
-
-2. **Dados de CONTARECEBER a sincronizar:**
-   - Titulos em aberto?
-   - Titulos vencidos?
-   - Historico de pagamentos parciais?
-   - Renegociacoes?
-
-3. **Notificacoes desejadas:**
-   - WhatsApp para vencimentos?
-   - Email para PJ?
-   - Lembretes antecipados?
-
-4. **Integracao com ClubeFlex:**
-   - Deve compartilhar cadastro de clientes?
-   - Pontos devem considerar pagamentos de titulos?
-
----
-
-## Secao Tecnica
-
-### Arquivos a Criar/Modificar no Integrador
-
-| Arquivo | Acao | Descricao |
-|---------|------|-----------|
-| `Models/TituloPayload.cs` | Criar | Payload para titulos a receber |
-| `Models/ProjectConfig.cs` | Criar | Configuracao por projeto |
-| `Services/DatabaseService.cs` | Modificar | Adicionar GetReceivablesAsync() |
-| `Services/SyncService.cs` | Modificar | Suportar multiplos projetos |
-| `appsettings.json` | Modificar | Array de projetos |
-
-### Novo Projeto Lovable - Estrutura de Tabelas
+## Estrutura de Tabelas para Novo Projeto
 
 ```text
 +------------------+     +----------------------+
@@ -182,10 +151,15 @@ Antes de comecar, precisamos definir:
 | customer_id_ext  |     | receivable_id_ext    |
 | name             |     | invoice_id_ext       |
 | doc (cpf/cnpj)   |     | amount               |
-| phone            |     | due_date             |
-| email            |     | installment_number   |
-+------------------+     | total_installments   |
+| phone            |     | paid_amount          |
+| email            |     | balance              |
++------------------+     | due_date             |
+                         | issued_at            |
+                         | installment_number   |
+                         | total_installments   |
                          | status               |
+                         | days_overdue         |
+                         | is_overdue           |
                          | created_at           |
                          +----------------------+
                                   |
@@ -200,19 +174,8 @@ Antes de comecar, precisamos definir:
                     +------------------------+
 ```
 
-### Edge Functions Necessarias
-
-1. **titulo-criado** - Recebe titulo do ERP
-2. **sync-log** - Pode reutilizar a mesma logica
-3. **notificar-vencimento** - Enviar lembretes
-
 ---
 
-## Proximos Passos
+## ✅ Implementação Concluída
 
-1. Criar o novo projeto Lovable para Cobrancas
-2. Definir estrutura de tabelas e RLS
-3. Criar Edge Functions de recepcao
-4. Modificar integrador para suportar multiplos destinos
-5. Testar sincronizacao em paralelo
-
+O integrador está pronto para receber a configuração do novo projeto quando ele for criado no Lovable.

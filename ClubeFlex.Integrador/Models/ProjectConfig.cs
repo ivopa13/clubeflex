@@ -1,0 +1,64 @@
+using Newtonsoft.Json;
+
+namespace ClubeFlex.Integrador.Models;
+
+/// <summary>
+/// Configuração de um projeto destino para sincronização
+/// Permite enviar dados para múltiplos projetos Lovable simultaneamente
+/// </summary>
+public class ProjectConfig
+{
+    /// <summary>
+    /// Nome identificador do projeto (ex: "ClubeFlex", "SistemaCobrancas")
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// URL base das Edge Functions do projeto Supabase
+    /// Ex: "https://skhljdaqfzweshjrlcnn.supabase.co/functions/v1"
+    /// </summary>
+    public string BaseUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Chave de API (anon key) do projeto Supabase
+    /// </summary>
+    public string ApiKey { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Se verdadeiro, sincroniza faturas (MOVENDA) para este projeto
+    /// </summary>
+    public bool SyncInvoices { get; set; } = false;
+
+    /// <summary>
+    /// Se verdadeiro, sincroniza pagamentos (CONTARECEBERREC, MOVENDAREC, CHEQUES) para este projeto
+    /// </summary>
+    public bool SyncPayments { get; set; } = false;
+
+    /// <summary>
+    /// Se verdadeiro, sincroniza títulos a receber (CONTARECEBER) para este projeto
+    /// </summary>
+    public bool SyncReceivables { get; set; } = false;
+
+    /// <summary>
+    /// Valida se a configuração do projeto está completa
+    /// </summary>
+    public bool IsValid()
+    {
+        return !string.IsNullOrEmpty(Name) 
+            && !string.IsNullOrEmpty(BaseUrl) 
+            && !string.IsNullOrEmpty(ApiKey)
+            && (SyncInvoices || SyncPayments || SyncReceivables);
+    }
+
+    /// <summary>
+    /// Retorna descrição do que este projeto sincroniza
+    /// </summary>
+    public string GetSyncDescription()
+    {
+        var syncs = new List<string>();
+        if (SyncInvoices) syncs.Add("faturas");
+        if (SyncPayments) syncs.Add("pagamentos");
+        if (SyncReceivables) syncs.Add("títulos a receber");
+        return syncs.Count > 0 ? string.Join(", ", syncs) : "nada";
+    }
+}

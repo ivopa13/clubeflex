@@ -6,7 +6,7 @@ namespace ClubeFlex.Integrador;
 
 class Program
 {
-static async Task<int> Main(string[] args)
+    static async Task<int> Main(string[] args)
     {
         // MODO SILENCIOSO É O PADRÃO - fecha automaticamente
         // Use --interactive ou -i se quiser que espere Enter no final
@@ -15,7 +15,8 @@ static async Task<int> Main(string[] args)
         
         // PRIMEIRO: Output básico sem depender de nada
         Console.WriteLine("==============================================");
-        Console.WriteLine("       CLUBE FLEX INTEGRADOR v1.3");
+        Console.WriteLine("       CLUBE FLEX INTEGRADOR v2.0");
+        Console.WriteLine("         (Multi-Projeto Support)");
         Console.WriteLine("==============================================");
         if (!interactiveMode) Console.WriteLine("       [FECHA AUTOMATICAMENTE]");
         if (updateTypesMode) Console.WriteLine("       [MODO: ATUALIZAÇÃO DE TIPOS]");
@@ -48,12 +49,8 @@ static async Task<int> Main(string[] args)
 
             // Validar configurações obrigatórias
             var connectionString = configuration.GetConnectionString("LocalDatabase");
-            var apiBaseUrl = configuration["ClubeFlexApi:BaseUrl"];
-            var apiKey = configuration["ClubeFlexApi:ApiKey"];
 
             Console.WriteLine($"Connection string configurada: {!string.IsNullOrEmpty(connectionString)}");
-            Console.WriteLine($"API BaseUrl configurada: {!string.IsNullOrEmpty(apiBaseUrl)}");
-            Console.WriteLine($"API Key configurada: {!string.IsNullOrEmpty(apiKey)}");
             Console.WriteLine();
 
             if (string.IsNullOrEmpty(connectionString))
@@ -63,19 +60,45 @@ static async Task<int> Main(string[] args)
                 return 1;
             }
 
-            if (string.IsNullOrEmpty(apiBaseUrl) || string.IsNullOrEmpty(apiKey))
+            // Verificar projetos configurados
+            var projects = configuration.GetSection("Projects").GetChildren().ToList();
+            var legacyApiUrl = configuration["ClubeFlexApi:BaseUrl"];
+            
+            if (projects.Count == 0 && string.IsNullOrEmpty(legacyApiUrl))
             {
-                Log.Fatal("Configurações da API do Clube Flex não encontradas no appsettings.json");
-                Console.WriteLine("ERRO: Configurações da API não encontradas!");
+                Log.Fatal("Nenhum projeto configurado. Configure 'Projects' ou 'ClubeFlexApi' no appsettings.json");
+                Console.WriteLine("ERRO: Nenhum projeto configurado no appsettings.json!");
                 return 1;
             }
+
+            if (projects.Count > 0)
+            {
+                Console.WriteLine($"Projetos configurados: {projects.Count}");
+                foreach (var project in projects)
+                {
+                    var name = project["Name"] ?? "Sem nome";
+                    var syncInvoices = project["SyncInvoices"] == "True" || project["SyncInvoices"] == "true";
+                    var syncPayments = project["SyncPayments"] == "True" || project["SyncPayments"] == "true";
+                    var syncReceivables = project["SyncReceivables"] == "True" || project["SyncReceivables"] == "true";
+                    
+                    var syncs = new List<string>();
+                    if (syncInvoices) syncs.Add("faturas");
+                    if (syncPayments) syncs.Add("pagamentos");
+                    if (syncReceivables) syncs.Add("títulos");
+                    
+                    Console.WriteLine($"  📦 {name}: {string.Join(", ", syncs)}");
+                }
+            }
+            else
+            {
+                Console.WriteLine("Usando configuração legacy (ClubeFlexApi)");
+            }
+            Console.WriteLine();
 
             // Inicializar serviços
             Console.WriteLine("Inicializando serviços...");
             var databaseService = new DatabaseService(connectionString);
-            var apiService = new ClubeFlexApiService(apiBaseUrl, apiKey);
-            var cloudSyncLogService = new CloudSyncLogService(configuration);
-            var syncService = new SyncService(databaseService, apiService, cloudSyncLogService, configuration);
+            var syncService = new SyncService(databaseService, configuration);
             Console.WriteLine("Serviços inicializados com sucesso.");
             Console.WriteLine();
 

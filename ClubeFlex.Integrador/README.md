@@ -1,6 +1,13 @@
-# Clube Flex - Integrador Windows (CPlus 4.10)
+# Clube Flex - Integrador Windows v2.0 (Multi-Projeto)
 
-Console Application para sincronizar dados do **CPlus 4.10** com o Clube Flex.
+Console Application para sincronizar dados do **CPlus 4.10** com **múltiplos projetos Lovable/Supabase**.
+
+## 🆕 Novidades v2.0
+
+- **Multi-projeto**: Sincronize dados para múltiplos destinos simultaneamente
+- **Títulos a Receber**: Suporte para CONTARECEBER (Sistema de Cobranças)
+- **Configuração flexível**: Cada projeto escolhe quais dados sincronizar
+- **Compatibilidade**: Formato legado (ClubeFlexApi) ainda suportado
 
 ## 📋 Pré-requisitos
 
@@ -12,51 +19,53 @@ Console Application para sincronizar dados do **CPlus 4.10** com o Clube Flex.
 
 ## 🚀 Instalação
 
-### 1. Configurar Banco de Dados Firebird
+### 1. Configurar appsettings.json
 
-Execute o script SQL no seu banco de dados **Firebird** usando **FlameRobin** ou **IBExpert**:
+Edite o arquivo `appsettings.json` com suas configurações:
 
-```bash
-Scripts/create-sync-log.sql
-```
-
-Isso criará a tabela `sync_log` necessária para controle de sincronização.
-
-**Como executar:**
-1. Abra o FlameRobin
-2. Conecte no banco do CPlus
-3. Execute o script `create-sync-log.sql`
-
-### 2. Configurar appsettings.json
-
-Edite o arquivo `appsettings.json` com suas configurações do **Firebird**:
+#### Configuração Multi-Projeto (RECOMENDADA)
 
 ```json
 {
   "ConnectionStrings": {
-    "LocalDatabase": "DataSource=localhost;Database=C:\\CPLUS\\DADOS\\BANCO.FDB;User=SYSDBA;Password=masterkey;Charset=WIN1252;ServerType=0;"
+    "LocalDatabase": "DataSource=localhost;Database=C:\\CPlus\\CPlus.fdb;User=SYSDBA;Password=masterkey;Charset=NONE;ServerType=0;"
   },
-  "ClubeFlexApi": {
-    "BaseUrl": "https://skhljdaqfzweshjrlcnn.supabase.co/functions/v1",
-    "ApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNraGxqZGFxZnp3ZXNoanJsY25uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTM0NTAsImV4cCI6MjA3Njc4OTQ1MH0.YZCXrpR3Cz-MXsVXi6aBlbAeN0E2DSmyCspMLuM_j-M"
-  },
+  "Projects": [
+    {
+      "Name": "ClubeFlex",
+      "BaseUrl": "https://skhljdaqfzweshjrlcnn.supabase.co/functions/v1",
+      "ApiKey": "SUA_API_KEY_CLUBEFLEX",
+      "SyncInvoices": true,
+      "SyncPayments": true,
+      "SyncReceivables": false
+    },
+    {
+      "Name": "SistemaCobrancas",
+      "BaseUrl": "https://OUTRO_PROJETO.supabase.co/functions/v1",
+      "ApiKey": "SUA_API_KEY_COBRANCAS",
+      "SyncInvoices": false,
+      "SyncPayments": false,
+      "SyncReceivables": true
+    }
+  ],
   "SyncSettings": {
     "BatchSize": 100,
     "RetryAttempts": 3,
-    "RetryDelaySeconds": 30
+    "RetryDelaySeconds": 30,
+    "SyncFromDate": "TODAY"
   }
 }
 ```
 
-**⚠️ IMPORTANTE - Parâmetros Firebird:**
-- `DataSource`: IP/hostname do servidor Firebird (localhost se local)
-- `Database`: Caminho completo do arquivo .FDB do CPlus
-- `User`: Usuário do Firebird (padrão: SYSDBA)
-- `Password`: Senha do Firebird (padrão: masterkey)
-- `Charset`: WIN1252 (comum no CPlus)
-- `ServerType`: 0 (Firebird 2.5+)
+### 2. Opções de Sincronização por Projeto
 
-### 3. Mapeamento CPlus → Clube Flex
+| Opção | Descrição | Tabelas CPlus |
+|-------|-----------|---------------|
+| `SyncInvoices` | Sincroniza faturas/vendas | MOVENDA, CLIENTE, TRANSPORTADORA |
+| `SyncPayments` | Sincroniza pagamentos | CONTARECEBERREC, MOVENDAREC, CHEQUES |
+| `SyncReceivables` | Sincroniza títulos a receber | CONTARECEBER, CLIENTE |
+
+### 3. Mapeamento CPlus → Lovable Cloud
 
 O código já está **pré-configurado** para o CPlus 4.10 com a seguinte estrutura:
 
@@ -65,13 +74,16 @@ O código já está **pré-configurado** para o CPlus 4.10 com a seguinte estrut
 |---|---|---|
 | **MOVENDA** | Faturas/Vendas | NUMPED, VALORTOTALNOTA, DATA, CODCLI, CODTRANS |
 | **CLIENTE** | Clientes | CODCLI, NOMECLI, CPF, CNPJ, EMAIL, TELEFONE |
-| **TRANSPORTADORA** | Especificadores | CODETRANS, NOMETRANS, CNPJ, EMAIL, TELEFONE, CATEGORIA |
-| **CONTARECEBERREC** | Pagamentos | CODREC, ID, VALOR, DATA, CODCLI |
+| **TRANSPORTADORA** | Especificadores | CODTRANS, NOMETRANS, CNPJ, EMAIL, TELEFONE, CATEGORIA |
+| **CONTARECEBERREC** | Pagamentos a prazo | CODREC, ID, VALOR, DATA, CODCLI |
+| **MOVENDAREC** | Pagamentos à vista | CODMOVENDA, VALOR, CODREC |
+| **CHEQUES** | Cheques compensados | CODMOVENDA, VALOR, DEPOSITO, NUMCHEQUE |
+| **CONTARECEBER** | Títulos a receber | CODCR, VALOR, VENCIMENTO, SITUACAO, PARCELA |
 
 **✅ Não precisa alterar nada se sua estrutura do CPlus for padrão!**
 
 Se você usa campos customizados ou tabelas diferentes, edite:
-- `Services/DatabaseService.cs` → Métodos `GetNewInvoicesAsync()` e `GetNewPaymentsAsync()`
+- `Services/DatabaseService.cs` → Métodos `GetNewInvoicesAsync()`, `GetNewPaymentsAsync()`, `GetReceivablesAsync()`
 
 ### 4. Compilar o Projeto
 
@@ -136,24 +148,22 @@ schtasks /Delete /TN "ClubeFlexSync" /F
 
 ```json
 {
-  "event_id": "INV-12345-123456789",
+  "event_id": "FAT_12345",
   "source": "erp_windows",
   "invoice_id_ext": "12345",
   "total_amount": 1500.00,
-  "issued_at": "2025-01-15T10:30:00Z",
+  "issued_at": "2025-01-15",
+  "movement_type": "produto",
   "customer": {
     "id_ext": "C001",
     "name": "João Silva",
-    "doc": "12345678900",
+    "cpf": "12345678900",
     "email": "joao@email.com",
-    "phone": "11999999999"
+    "phone": "(19) 99999-9999"
   },
   "specifier": {
     "id_ext": "E001",
     "name": "Maria Pereira",
-    "doc": "98765432100",
-    "email": "maria@email.com",
-    "phone": "11988888888",
     "role": "profissional"
   }
 }
@@ -163,10 +173,38 @@ schtasks /Delete /TN "ClubeFlexSync" /F
 
 ```json
 {
-  "event_id": "PAY-67890-123456789",
+  "event_id": "PAG_67890",
   "invoice_id_ext": "12345",
   "paid_amount": 1500.00,
-  "paid_at": "2025-01-20T14:00:00Z"
+  "paid_at": "2025-01-20",
+  "payment_type": "pix"
+}
+```
+
+### Título a Receber (titulo-criado) - NOVO!
+
+```json
+{
+  "event_id": "TIT_98765",
+  "source": "erp_windows",
+  "receivable_id_ext": "98765",
+  "invoice_id_ext": "12345",
+  "amount": 500.00,
+  "paid_amount": 0.00,
+  "balance": 500.00,
+  "due_date": "2025-02-15",
+  "issued_at": "2025-01-15",
+  "installment_number": 1,
+  "total_installments": 3,
+  "status": "A",
+  "days_overdue": 0,
+  "is_overdue": false,
+  "customer": {
+    "id_ext": "C001",
+    "name": "João Silva",
+    "cpf": "12345678900",
+    "phone": "(19) 99999-9999"
+  }
 }
 ```
 
