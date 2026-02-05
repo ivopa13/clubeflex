@@ -13,7 +13,7 @@ interface StartExecutionPayload {
 interface FinishExecutionPayload {
   action: 'finish';
   execution_id: string;
-  status: 'completed' | 'failed';
+  status: 'completed' | 'completed_with_errors' | 'failed';
   total_events?: number;
   success_count?: number;
   error_count?: number;
@@ -26,7 +26,7 @@ type ExecutionPayload = StartExecutionPayload | FinishExecutionPayload;
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
@@ -37,12 +37,10 @@ Deno.serve(async (req) => {
 
     const body: ExecutionPayload = await req.json();
 
-    console.log('Recebendo requisição de execução:', {
-      action: body.action,
-      execution_id: body.execution_id,
-    });
+    console.log('Recebendo requisição de execução:', JSON.stringify(body));
 
     if (!body.execution_id || !body.action) {
+      console.error('Campos obrigatórios ausentes');
       return new Response(
         JSON.stringify({ error: 'execution_id e action são obrigatórios' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -50,6 +48,8 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === 'start') {
+      console.log('Iniciando nova execução:', body.execution_id);
+      
       // Create new execution record
       const { data, error } = await supabase
         .from('integrator_executions')
@@ -69,19 +69,27 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log('Execução iniciada:', data.id);
+      console.log('Execução iniciada com sucesso:', data.id);
 
       return new Response(
         JSON.stringify({ success: true, id: data.id, execution_id: body.execution_id }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else if (body.action === 'finish') {
+      console.log('Finalizando execução:', body.execution_id);
+      
+      // Determine final status
+      let finalStatus = body.status;
+      if (finalStatus === 'completed' && (body.error_count ?? 0) > 0) {
+        finalStatus = 'completed_with_errors';
+      }
+
       // Update execution with final stats
       const { data, error } = await supabase
         .from('integrator_executions')
         .update({
           finished_at: new Date().toISOString(),
-          status: body.status,
+          status: finalStatus,
           total_events: body.total_events ?? 0,
           success_count: body.success_count ?? 0,
           error_count: body.error_count ?? 0,
@@ -100,7 +108,7 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log('Execução finalizada:', data.id);
+      console.log('Execução finalizada com sucesso:', data.id, 'status:', finalStatus);
 
       return new Response(
         JSON.stringify({ success: true, id: data.id }),
