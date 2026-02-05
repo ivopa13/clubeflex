@@ -387,7 +387,16 @@ public class SyncService
             var syncedReceivables = await syncLogService.GetSuccessfulEventIdsAsync("titulo");
             var limit = _testMode ? _testModeLimit : (int?)null;
             
-            var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, syncedReceivables);
+            // Usar configuração do projeto para ignorar ou não o filtro de data
+            // Para régua de cobrança, é necessário buscar TODOS os títulos em aberto (vencidos + a vencer)
+            var ignoreFromDate = project.SyncReceivablesIgnoreDate;
+            
+            if (ignoreFromDate)
+            {
+                Log.Information($"[{project.Name}] 📅 SyncReceivablesIgnoreDate = true: Buscando TODOS os títulos em aberto");
+            }
+            
+            var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, syncedReceivables, ignoreFromDate);
 
             if (receivables.Count == 0)
             {

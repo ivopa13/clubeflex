@@ -629,12 +629,26 @@ public class DatabaseService
     /// Busca títulos a receber (CONTARECEBER) para o sistema de cobranças
     /// Inclui apenas títulos em aberto (SITUACAO = 'A')
     /// </summary>
-    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
+    /// <param name="limit">Limite de registros por batch</param>
+    /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
+    /// <param name="syncedEventIds">IDs de eventos já sincronizados</param>
+    /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
+    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null, bool ignoreFromDate = false)
     {
         var receivables = new List<TituloPayload>();
 
         var batchSize = limit ?? 100;
-        var dateFilter = fromDate.HasValue ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+        
+        // Se ignoreFromDate = true, não aplica filtro de data
+        // Isso permite buscar TODAS as dívidas em aberto, inclusive vencidas há muito tempo
+        var dateFilter = (fromDate.HasValue && !ignoreFromDate) 
+            ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'" 
+            : "";
+        
+        if (ignoreFromDate)
+        {
+            Log.Information("📋 Buscando TODOS os títulos em aberto (sem filtro de data)");
+        }
 
         var query = $@"
             SELECT FIRST {batchSize}
