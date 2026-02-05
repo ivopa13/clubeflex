@@ -40,6 +40,13 @@ public class ProjectConfig
     public bool SyncReceivables { get; set; } = false;
 
     /// <summary>
+    /// Se verdadeiro, ignora o filtro de data ao buscar títulos a receber.
+    /// Necessário para régua de cobrança que precisa considerar dívidas antigas (vencidas).
+    /// Default: true quando SyncReceivables = true
+    /// </summary>
+    public bool SyncReceivablesIgnoreDate { get; set; } = true;
+
+    /// <summary>
     /// Valida se a configuração do projeto está completa
     /// </summary>
     public bool IsValid()
