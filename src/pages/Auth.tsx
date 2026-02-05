@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { z } from "zod";
 import logoFlex from "@/assets/logo-flex.png";
+import TurnstileWidget from "@/components/TurnstileWidget";
 
 const emailSchema = z.string().email({ message: "Email inválido" });
 const passwordSchema = z.string().min(6, { message: "Senha deve ter no mínimo 6 caracteres" });
@@ -88,6 +89,50 @@ const Auth = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [savedEmail, setSavedEmail] = useState("");
   const [documentValue, setDocumentValue] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [turnstileVerified, setTurnstileVerified] = useState(false);
+
+  const handleTurnstileVerify = useCallback((token: string) => {
+    setTurnstileToken(token);
+    setTurnstileVerified(true);
+  }, []);
+
+  const handleTurnstileError = useCallback(() => {
+    setTurnstileToken(null);
+    setTurnstileVerified(false);
+    toast.error("Erro na verificação de segurança. Tente novamente.");
+  }, []);
+
+  const handleTurnstileExpire = useCallback(() => {
+    setTurnstileToken(null);
+    setTurnstileVerified(false);
+  }, []);
+
+  const verifyTurnstile = async (): Promise<boolean> => {
+    if (!turnstileToken) {
+      toast.error("Por favor, complete a verificação de segurança");
+      return false;
+    }
+
+    try {
+      const response = await supabase.functions.invoke("verify-turnstile", {
+        body: { token: turnstileToken },
+      });
+
+      if (response.error || !response.data?.success) {
+        toast.error("Verificação de segurança falhou. Tente novamente.");
+        setTurnstileToken(null);
+        setTurnstileVerified(false);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Turnstile verification error:", error);
+      toast.error("Erro ao verificar segurança. Tente novamente.");
+      return false;
+    }
+  };
 
   useEffect(() => {
     const storedEmail = localStorage.getItem("rememberedEmail");
@@ -108,6 +153,13 @@ const Auth = () => {
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
+
+      // Verify Turnstile token
+      const isVerified = await verifyTurnstile();
+      if (!isVerified) {
+        setIsLoading(false);
+        return;
+      }
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -220,6 +272,13 @@ const Auth = () => {
     try {
       emailSchema.parse(email);
       passwordSchema.parse(password);
+
+      // Verify Turnstile token
+      const isVerified = await verifyTurnstile();
+      if (!isVerified) {
+        setIsLoading(false);
+        return;
+      }
 
       // Validar documento
       if (!doc || doc.length < 11) {
@@ -349,7 +408,12 @@ const Auth = () => {
                     Lembrar meu email
                   </Label>
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <TurnstileWidget
+                  onVerify={handleTurnstileVerify}
+                  onError={handleTurnstileError}
+                  onExpire={handleTurnstileExpire}
+                />
+                <Button type="submit" className="w-full" disabled={isLoading || !turnstileVerified}>
                   {isLoading ? "Entrando..." : "Entrar"}
                 </Button>
               </form>
@@ -410,7 +474,12 @@ const Auth = () => {
                     disabled={isLoading}
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <TurnstileWidget
+                  onVerify={handleTurnstileVerify}
+                  onError={handleTurnstileError}
+                  onExpire={handleTurnstileExpire}
+                />
+                <Button type="submit" className="w-full" disabled={isLoading || !turnstileVerified}>
                   {isLoading ? "Cadastrando..." : "Criar Conta"}
                 </Button>
               </form>
