@@ -228,7 +228,7 @@ public class ProjectSyncLogService
                         // Extrair checksum do payload
                         try
                         {
-                            if (log.Payload.TryGetProperty("checksum", out var checksumElement))
+                            if (log.Payload.Value.TryGetProperty("checksum", out var checksumElement))
                             {
                                 var checksum = checksumElement.GetString();
                                 if (!string.IsNullOrEmpty(checksum))
