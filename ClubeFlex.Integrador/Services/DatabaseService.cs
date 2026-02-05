@@ -633,7 +633,16 @@ public class DatabaseService
     /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
     /// <param name="syncedEventIds">IDs de eventos já sincronizados</param>
     /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
-    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null, bool ignoreFromDate = false)
+    /// <summary>
+    /// Busca títulos a receber (CONTARECEBER) para o sistema de cobranças
+    /// Inclui apenas títulos em aberto (SITUACAO = 'A')
+    /// Agora calcula checksum para detectar alterações e evitar sincronização desnecessária
+    /// </summary>
+    /// <param name="limit">Limite de registros por batch</param>
+    /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
+    /// <param name="existingChecksums">Checksums existentes para comparar e evitar reenvio de dados inalterados</param>
+    /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
+    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false)
     {
         var receivables = new List<TituloPayload>();
 
@@ -677,6 +686,8 @@ public class DatabaseService
             {dateFilter}
             ORDER BY cr.DATVENC ASC, cr.CODCR ASC";
 
+        int skippedByChecksum = 0;
+
         try
         {
             using var connection = new FbConnection(_connectionString);
@@ -689,13 +700,6 @@ public class DatabaseService
             {
                 var receivableId = reader["receivable_id"].ToString() ?? "";
                 var eventId = $"TIT_{receivableId}";
-
-                // Pular se já foi sincronizado
-                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
-                {
-                    Log.Debug($"⏭️  Pulando título {receivableId} - já sincronizado");
-                    continue;
-                }
 
                 // Conversão segura de datas
                 var dueDate = SafeParseDateFromFirebird(reader["due_date"], "due_date", $"Título {receivableId}");
@@ -778,6 +782,24 @@ public class DatabaseService
                     }
                 };
 
+                // Calcular checksum
+                payload.CalculateChecksum();
+
+                // Comparar com checksum existente - se igual, pular
+                if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
+                {
+                    if (existingChecksum == payload.Checksum)
+                    {
+                        Log.Debug($"⏭️ Título {receivableId} sem alterações (checksum igual)");
+                        skippedByChecksum++;
+                        continue;
+                    }
+                    else
+                    {
+                        Log.Debug($"🔄 Título {receivableId} alterado - checksum anterior: {existingChecksum}, novo: {payload.Checksum}");
+                    }
+                }
+
                 receivables.Add(payload);
 
                 var overdueLabel = isOverdue ? $" ⚠️ VENCIDO há {daysOverdue} dias" : "";
@@ -785,6 +807,11 @@ public class DatabaseService
             }
 
             Log.Information($"📋 Encontrados {receivables.Count} títulos a receber para sincronizar");
+            
+            if (skippedByChecksum > 0)
+            {
+                Log.Information($"⏭️ {skippedByChecksum} títulos pulados (sem alterações - checksum igual)");
+            }
             
             var overdueCount = receivables.Count(r => r.IsOverdue);
             if (overdueCount > 0)

@@ -200,4 +200,74 @@ public class ProjectSyncLogService
         
         return eventIds;
     }
+
+    /// <summary>
+    /// Busca checksums dos títulos já sincronizados para comparação
+    /// Retorna Dictionary com event_id -> checksum
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetReceivableChecksumsAsync()
+    {
+        var checksums = new Dictionary<string, string>();
+        
+        try
+        {
+            // Buscar event_id e checksum (armazenado no campo payload)
+            var url = $"{_apiUrl}/sync_logs?event_type=eq.titulo&status=eq.success&select=event_id,payload";
+            
+            var response = await _httpClient.GetAsync(url);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+                var logs = JsonSerializer.Deserialize<List<SyncLogWithPayloadResponse>>(json);
+                
+                foreach (var log in logs ?? Enumerable.Empty<SyncLogWithPayloadResponse>())
+                {
+                    if (!string.IsNullOrEmpty(log.EventId) && log.Payload != null)
+                    {
+                        // Extrair checksum do payload
+                        try
+                        {
+                            if (log.Payload.TryGetProperty("checksum", out var checksumElement))
+                            {
+                                var checksum = checksumElement.GetString();
+                                if (!string.IsNullOrEmpty(checksum))
+                                {
+                                    checksums[log.EventId] = checksum;
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // Ignorar payloads que não têm checksum
+                        }
+                    }
+                }
+                
+                Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de títulos");
+            }
+            else
+            {
+                Log.Warning($"❌ [{_projectName}] Erro ao consultar checksums: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, $"⚠️ [{_projectName}] Não foi possível consultar checksums de títulos");
+        }
+        
+        return checksums;
+    }
+}
+
+/// <summary>
+/// Response para sync_log com payload
+/// </summary>
+public class SyncLogWithPayloadResponse
+{
+    [System.Text.Json.Serialization.JsonPropertyName("event_id")]
+    public string? EventId { get; set; }
+    
+    [System.Text.Json.Serialization.JsonPropertyName("payload")]
+    public System.Text.Json.JsonElement? Payload { get; set; }
 }

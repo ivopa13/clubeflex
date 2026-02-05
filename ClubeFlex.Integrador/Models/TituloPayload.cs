@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Newtonsoft.Json;
 
 namespace ClubeFlex.Integrador.Models;
@@ -103,6 +105,28 @@ public class TituloPayload
     /// </summary>
     [JsonProperty("customer")]
     public CustomerData Customer { get; set; } = new();
+
+    /// <summary>
+    /// Checksum MD5 dos campos que podem mudar (Amount, PaidAmount, Balance, Status)
+    /// Usado para detectar alterações e evitar sincronização desnecessária
+    /// </summary>
+    [JsonProperty("checksum")]
+    public string Checksum { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Calcula o checksum baseado nos campos que podem mudar
+    /// </summary>
+    public void CalculateChecksum()
+    {
+        // Campos que podem mudar e devem disparar uma nova sincronização
+        var dataToHash = $"{Amount:F2}|{PaidAmount:F2}|{Balance:F2}|{Status}|{DueDate}";
+        
+        using var md5 = MD5.Create();
+        var inputBytes = Encoding.UTF8.GetBytes(dataToHash);
+        var hashBytes = md5.ComputeHash(inputBytes);
+        
+        Checksum = Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
 }
 
 /// <summary>
