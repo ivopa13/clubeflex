@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Newtonsoft.Json;
 
 namespace ClubeFlex.Integrador.Models;
@@ -30,6 +32,28 @@ public class FaturaCriadaPayload
 
     [JsonProperty("movement_type")]
     public string MovementType { get; set; } = "produto";
+
+    /// <summary>
+    /// Checksum MD5 dos campos principais para detectar alterações
+    /// </summary>
+    [JsonProperty("checksum")]
+    public string Checksum { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Calcula o checksum baseado nos campos que podem mudar
+    /// </summary>
+    public void CalculateChecksum()
+    {
+        // Campos que identificam unicamente a fatura e seus valores
+        var specifierId = Specifier?.IdExt ?? "";
+        var dataToHash = $"{InvoiceIdExt}|{TotalAmount:F2}|{IssuedAt}|{Customer.IdExt}|{specifierId}|{MovementType}";
+        
+        using var md5 = MD5.Create();
+        var inputBytes = Encoding.UTF8.GetBytes(dataToHash);
+        var hashBytes = md5.ComputeHash(inputBytes);
+        
+        Checksum = Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
 }
 
 public class CustomerData

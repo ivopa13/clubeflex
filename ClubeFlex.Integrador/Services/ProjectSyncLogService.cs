@@ -207,12 +207,38 @@ public class ProjectSyncLogService
     /// </summary>
     public async Task<Dictionary<string, string>> GetReceivableChecksumsAsync()
     {
+        return await GetChecksumsAsync("titulo", "títulos");
+    }
+
+    /// <summary>
+    /// Busca checksums das faturas já sincronizadas para comparação
+    /// Retorna Dictionary com event_id -> checksum
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetInvoiceChecksumsAsync()
+    {
+        return await GetChecksumsAsync("fatura", "faturas");
+    }
+
+    /// <summary>
+    /// Busca checksums dos pagamentos já sincronizados para comparação
+    /// Retorna Dictionary com event_id -> checksum
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetPaymentChecksumsAsync()
+    {
+        return await GetChecksumsAsync("pagamento", "pagamentos");
+    }
+
+    /// <summary>
+    /// Método genérico para buscar checksums de um tipo de evento
+    /// </summary>
+    private async Task<Dictionary<string, string>> GetChecksumsAsync(string eventType, string displayName)
+    {
         var checksums = new Dictionary<string, string>();
         
         try
         {
             // Buscar event_id e checksum (armazenado no campo payload)
-            var url = $"{_apiUrl}/sync_logs?event_type=eq.titulo&status=eq.success&select=event_id,payload";
+            var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id,payload";
             
             var response = await _httpClient.GetAsync(url);
             
@@ -244,16 +270,16 @@ public class ProjectSyncLogService
                     }
                 }
                 
-                Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de títulos");
+                Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de {displayName}");
             }
             else
             {
-                Log.Warning($"❌ [{_projectName}] Erro ao consultar checksums: {response.StatusCode}");
+                Log.Warning($"❌ [{_projectName}] Erro ao consultar checksums de {displayName}: {response.StatusCode}");
             }
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, $"⚠️ [{_projectName}] Não foi possível consultar checksums de títulos");
+            Log.Warning(ex, $"⚠️ [{_projectName}] Não foi possível consultar checksums de {displayName}");
         }
         
         return checksums;
