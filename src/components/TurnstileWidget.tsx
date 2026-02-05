@@ -31,7 +31,12 @@ declare global {
 // Check if running in Lovable preview environment (skip Turnstile)
 const isLovablePreview = () => {
   const hostname = window.location.hostname;
-  return hostname.includes("lovable.app") || hostname.includes("lovable.dev") || hostname === "localhost";
+  return (
+    hostname.includes("lovableproject.com") ||
+    hostname.includes("lovable.app") ||
+    hostname.includes("lovable.dev") ||
+    hostname === "localhost"
+  );
 };
 
 const TurnstileWidget = ({ onVerify, onError, onExpire }: TurnstileWidgetProps) => {
@@ -90,6 +95,8 @@ const TurnstileWidget = ({ onVerify, onError, onExpire }: TurnstileWidgetProps) 
   }, [onVerify, onError, onExpire, siteKey]);
 
   useEffect(() => {
+    if (isPreview) return;
+
     // Check if script already loaded
     if (window.turnstile) {
       setIsLoaded(true);
@@ -116,9 +123,11 @@ const TurnstileWidget = ({ onVerify, onError, onExpire }: TurnstileWidgetProps) 
     return () => {
       delete window.onloadTurnstileCallback;
     };
-  }, []);
+  }, [isPreview]);
 
   useEffect(() => {
+    if (isPreview) return;
+
     if (isLoaded) {
       renderWidget();
     }
@@ -133,7 +142,7 @@ const TurnstileWidget = ({ onVerify, onError, onExpire }: TurnstileWidgetProps) 
         }
       }
     };
-  }, [isLoaded, renderWidget]);
+  }, [isLoaded, isPreview, renderWidget]);
 
   // In preview mode, show bypass message
   if (isPreview) {
