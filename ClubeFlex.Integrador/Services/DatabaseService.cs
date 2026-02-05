@@ -715,9 +715,15 @@ public class DatabaseService
                     : reader["customer_cnpj"].ToString()?.Trim();
 
                 // Parcela (não temos TOTALPARCELAS, usar 1 como default)
-                var installmentNumber = reader.IsDBNull(reader.GetOrdinal("installment_number")) 
-                    ? 1 
-                    : Convert.ToInt32(reader["installment_number"]);
+                var installmentNumber = 1;
+                if (!reader.IsDBNull(reader.GetOrdinal("installment_number")))
+                {
+                    var parcelaValue = reader["installment_number"].ToString()?.Trim();
+                    if (!string.IsNullOrEmpty(parcelaValue) && int.TryParse(parcelaValue, out int parcela))
+                    {
+                        installmentNumber = parcela;
+                    }
+                }
                 var totalInstallments = 1; // Campo não existe na tabela, usar 1
 
                 var payload = new TituloPayload
