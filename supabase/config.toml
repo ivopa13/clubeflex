@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.create-user-account]
 verify_jwt = true
+
+[functions.notify-validation-errors]
+verify_jwt = false
