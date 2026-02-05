@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 interface VerifyRequest {
@@ -16,37 +17,21 @@ interface TurnstileResponse {
   hostname?: string;
 }
 
-// Allowed preview domains where Turnstile is bypassed
-const PREVIEW_BYPASS_DOMAINS = ["lovable.app", "lovable.dev", "localhost"];
-
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { token }: VerifyRequest = await req.json();
+    const body = (await req.json().catch(() => null)) as VerifyRequest | null;
+    const token = body?.token;
 
-    if (!token) {
+    if (!token || typeof token !== "string") {
       return new Response(
         JSON.stringify({ success: false, error: "Token não fornecido" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-    }
-
-    // Check for preview bypass token
-    if (token === "preview-bypass-token") {
-      const origin = req.headers.get("origin") || "";
-      const isPreviewDomain = PREVIEW_BYPASS_DOMAINS.some(domain => origin.includes(domain));
-      
-      if (isPreviewDomain) {
-        console.log("Turnstile bypassed for preview domain:", origin);
-        return new Response(
-          JSON.stringify({ success: true, bypassed: true }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
     }
 
     const secretKey = Deno.env.get("CLOUDFLARE_TURNSTILE_SECRET_KEY");
@@ -68,29 +53,28 @@ serve(async (req) => {
       body: formData,
     });
 
-    const outcome: TurnstileResponse = await result.json();
+    const outcome = (await result.json()) as TurnstileResponse;
 
     if (outcome.success) {
-      return new Response(
-        JSON.stringify({ success: true }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } else {
-      console.error("Turnstile verification failed:", outcome["error-codes"]);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: "Verificação de segurança falhou",
-          codes: outcome["error-codes"]
-        }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
+    console.error("Turnstile verification failed:", outcome["error-codes"]);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: "Verificação de segurança falhou",
+        codes: outcome["error-codes"],
+      }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (error: any) {
     console.error("Error in verify-turnstile:", error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message || "Erro interno" }),
+      JSON.stringify({ success: false, error: error?.message || "Erro interno" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

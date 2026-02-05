@@ -91,6 +91,15 @@ const Auth = () => {
   const [documentValue, setDocumentValue] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [turnstileVerified, setTurnstileVerified] = useState(false);
+  const [isPreview] = useState(() => {
+    const hostname = window.location.hostname;
+    return (
+      hostname.includes("lovableproject.com") ||
+      hostname.includes("lovable.app") ||
+      hostname.includes("lovable.dev") ||
+      hostname === "localhost"
+    );
+  });
 
   const handleTurnstileVerify = useCallback((token: string) => {
     setTurnstileToken(token);
@@ -109,6 +118,9 @@ const Auth = () => {
   }, []);
 
   const verifyTurnstile = async (): Promise<boolean> => {
+    // In Lovable preview, skip verification (domain isn't registered in Cloudflare)
+    if (isPreview) return true;
+
     if (!turnstileToken) {
       toast.error("Por favor, complete a verificação de segurança");
       return false;
@@ -413,7 +425,7 @@ const Auth = () => {
                   onError={handleTurnstileError}
                   onExpire={handleTurnstileExpire}
                 />
-                <Button type="submit" className="w-full" disabled={isLoading || !turnstileVerified}>
+                <Button type="submit" className="w-full" disabled={isLoading || (!turnstileVerified && !isPreview)}>
                   {isLoading ? "Entrando..." : "Entrar"}
                 </Button>
               </form>
@@ -479,7 +491,7 @@ const Auth = () => {
                   onError={handleTurnstileError}
                   onExpire={handleTurnstileExpire}
                 />
-                <Button type="submit" className="w-full" disabled={isLoading || !turnstileVerified}>
+                <Button type="submit" className="w-full" disabled={isLoading || (!turnstileVerified && !isPreview)}>
                   {isLoading ? "Cadastrando..." : "Criar Conta"}
                 </Button>
               </form>
