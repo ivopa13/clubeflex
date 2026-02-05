@@ -374,6 +374,10 @@ public class SyncService
     /// <summary>
     /// Sincroniza títulos a receber para um projeto específico (Sistema de Cobranças)
     /// </summary>
+    /// <summary>
+    /// Sincroniza títulos a receber para um projeto específico (Sistema de Cobranças)
+    /// Usa checksum para detectar alterações e evitar reenvio desnecessário
+    /// </summary>
     private async Task SyncReceivablesForProjectAsync(
         ProjectConfig project, 
         ProjectApiService apiService, 
@@ -384,7 +388,8 @@ public class SyncService
         
         try
         {
-            var syncedReceivables = await syncLogService.GetSuccessfulEventIdsAsync("titulo");
+            // Buscar checksums existentes para comparação (em vez de apenas event_ids)
+            var existingChecksums = await syncLogService.GetReceivableChecksumsAsync();
             var limit = _testMode ? _testModeLimit : (int?)null;
             
             // Usar configuração do projeto para ignorar ou não o filtro de data
@@ -396,15 +401,16 @@ public class SyncService
                 Log.Information($"[{project.Name}] 📅 SyncReceivablesIgnoreDate = true: Buscando TODOS os títulos em aberto");
             }
             
-            var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, syncedReceivables, ignoreFromDate);
+            // Passar checksums existentes para comparação - apenas títulos alterados serão retornados
+            var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate);
 
             if (receivables.Count == 0)
             {
-                Log.Information($"[{project.Name}] Nenhum título novo para sincronizar");
+                Log.Information($"[{project.Name}] Nenhum título novo ou alterado para sincronizar");
                 return;
             }
 
-            Log.Information($"[{project.Name}] 📋 Encontrados {receivables.Count} títulos a receber");
+            Log.Information($"[{project.Name}] 📋 Encontrados {receivables.Count} títulos novos/alterados");
             
             var overdueCount = receivables.Count(r => r.IsOverdue);
             if (overdueCount > 0)
