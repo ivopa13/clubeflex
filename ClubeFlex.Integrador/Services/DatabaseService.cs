@@ -652,12 +652,11 @@ public class DatabaseService
                 cr.DATAEMISSAO as issued_at,
                 cr.PARCELA as installment_number,
                 cr.TOTALPARCELAS as total_installments,
-                cr.SITUACAO as status,
                 cr.NUMDOC as document_number,
                 cr.OBS as description
             FROM CONTARECEBER cr
             INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
-            WHERE cr.SITUACAO = 'A'
+            WHERE cr.VALOR > cr.VALORPAGO
             AND cr.VALOR > 0
             {dateFilter}
             ORDER BY cr.VENCIMENTO ASC, cr.CODCR ASC";
