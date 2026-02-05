@@ -16,6 +16,9 @@ interface TurnstileResponse {
   hostname?: string;
 }
 
+// Allowed preview domains where Turnstile is bypassed
+const PREVIEW_BYPASS_DOMAINS = ["lovable.app", "lovable.dev", "localhost"];
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -30,6 +33,20 @@ serve(async (req) => {
         JSON.stringify({ success: false, error: "Token não fornecido" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Check for preview bypass token
+    if (token === "preview-bypass-token") {
+      const origin = req.headers.get("origin") || "";
+      const isPreviewDomain = PREVIEW_BYPASS_DOMAINS.some(domain => origin.includes(domain));
+      
+      if (isPreviewDomain) {
+        console.log("Turnstile bypassed for preview domain:", origin);
+        return new Response(
+          JSON.stringify({ success: true, bypassed: true }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     const secretKey = Deno.env.get("CLOUDFLARE_TURNSTILE_SECRET_KEY");

@@ -28,14 +28,33 @@ declare global {
   }
 }
 
+// Check if running in Lovable preview environment (skip Turnstile)
+const isLovablePreview = () => {
+  const hostname = window.location.hostname;
+  return hostname.includes("lovable.app") || hostname.includes("lovable.dev") || hostname === "localhost";
+};
+
 const TurnstileWidget = ({ onVerify, onError, onExpire }: TurnstileWidgetProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [siteKey, setSiteKey] = useState<string | null>(null);
+  const [isPreview] = useState(isLovablePreview);
 
-  // Fetch site key from edge function
+  // Auto-verify in preview environment
   useEffect(() => {
+    if (isPreview) {
+      // Simulate verification in preview mode
+      setTimeout(() => {
+        onVerify("preview-bypass-token");
+      }, 500);
+    }
+  }, [isPreview, onVerify]);
+
+  // Fetch site key from edge function (only in production)
+  useEffect(() => {
+    if (isPreview) return;
+    
     const fetchSiteKey = async () => {
       try {
         const { data, error } = await supabase.functions.invoke("get-turnstile-sitekey");
@@ -51,7 +70,7 @@ const TurnstileWidget = ({ onVerify, onError, onExpire }: TurnstileWidgetProps) 
       }
     };
     fetchSiteKey();
-  }, []);
+  }, [isPreview]);
 
   const renderWidget = useCallback(() => {
     if (!containerRef.current || !window.turnstile || widgetIdRef.current || !siteKey) return;
@@ -115,6 +134,17 @@ const TurnstileWidget = ({ onVerify, onError, onExpire }: TurnstileWidgetProps) 
       }
     };
   }, [isLoaded, renderWidget]);
+
+  // In preview mode, show bypass message
+  if (isPreview) {
+    return (
+      <div className="flex justify-center my-4">
+        <div className="text-xs text-muted-foreground bg-muted px-3 py-2 rounded">
+          ✓ Verificação de segurança (modo preview)
+        </div>
+      </div>
+    );
+  }
 
   if (!siteKey) {
     return (
