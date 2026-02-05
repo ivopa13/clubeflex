@@ -626,6 +626,163 @@ public class DatabaseService
     }
 
     /// <summary>
+    /// Busca títulos a receber (CONTARECEBER) para o sistema de cobranças
+    /// Inclui apenas títulos em aberto (SITUACAO = 'A')
+    /// </summary>
+    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, HashSet<string>? syncedEventIds = null)
+    {
+        var receivables = new List<TituloPayload>();
+
+        var batchSize = limit ?? 100;
+        var dateFilter = fromDate.HasValue ? $"AND cr.VENCIMENTO >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+
+        var query = $@"
+            SELECT FIRST {batchSize}
+                cr.CODCR as receivable_id,
+                cr.CODMOVENDA as invoice_id,
+                cr.CODCLI as customer_id,
+                c.NOMECLI as customer_name,
+                c.CPF as customer_cpf,
+                c.CNPJ as customer_cnpj,
+                c.EMAIL as customer_email,
+                c.TELEFONE as customer_phone,
+                cr.VALOR as amount,
+                cr.VALORPAGO as paid_amount,
+                cr.VENCIMENTO as due_date,
+                cr.DATAEMISSAO as issued_at,
+                cr.PARCELA as installment_number,
+                cr.TOTALPARCELAS as total_installments,
+                cr.SITUACAO as status,
+                cr.NUMDOC as document_number,
+                cr.OBS as description
+            FROM CONTARECEBER cr
+            INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
+            WHERE cr.SITUACAO = 'A'
+            AND cr.VALOR > 0
+            {dateFilter}
+            ORDER BY cr.VENCIMENTO ASC, cr.CODCR ASC";
+
+        try
+        {
+            using var connection = new FbConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new FbCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var receivableId = reader["receivable_id"].ToString() ?? "";
+                var eventId = $"TIT_{receivableId}";
+
+                // Pular se já foi sincronizado
+                if (syncedEventIds != null && syncedEventIds.Contains(eventId))
+                {
+                    Log.Debug($"⏭️  Pulando título {receivableId} - já sincronizado");
+                    continue;
+                }
+
+                // Conversão segura de datas
+                var dueDate = SafeParseDateFromFirebird(reader["due_date"], "due_date", $"Título {receivableId}");
+                if (!dueDate.HasValue)
+                {
+                    Log.Warning($"⚠️ Título {receivableId} ignorado por data de vencimento inválida");
+                    continue;
+                }
+
+                var issuedAt = SafeParseDateFromFirebird(reader["issued_at"], "issued_at", $"Título {receivableId}");
+
+                // Calcular valores
+                var amount = Convert.ToDecimal(reader["amount"]);
+                var paidAmount = reader.IsDBNull(reader.GetOrdinal("paid_amount")) 
+                    ? 0m 
+                    : Convert.ToDecimal(reader["paid_amount"]);
+                var balance = amount - paidAmount;
+
+                // Calcular atraso
+                var today = DateTime.Today;
+                var daysOverdue = dueDate.Value < today ? (today - dueDate.Value).Days : 0;
+                var isOverdue = daysOverdue > 0;
+
+                // CPF/CNPJ do cliente
+                var customerCpf = reader.IsDBNull(reader.GetOrdinal("customer_cpf")) 
+                    ? null 
+                    : reader["customer_cpf"].ToString()?.Trim();
+                
+                var customerCnpj = reader.IsDBNull(reader.GetOrdinal("customer_cnpj")) 
+                    ? null 
+                    : reader["customer_cnpj"].ToString()?.Trim();
+
+                // Parcela/Total
+                var installmentNumber = reader.IsDBNull(reader.GetOrdinal("installment_number")) 
+                    ? 1 
+                    : Convert.ToInt32(reader["installment_number"]);
+                var totalInstallments = reader.IsDBNull(reader.GetOrdinal("total_installments")) 
+                    ? 1 
+                    : Convert.ToInt32(reader["total_installments"]);
+
+                var payload = new TituloPayload
+                {
+                    EventId = eventId,
+                    ReceivableIdExt = receivableId,
+                    InvoiceIdExt = reader.IsDBNull(reader.GetOrdinal("invoice_id")) 
+                        ? null 
+                        : reader["invoice_id"].ToString(),
+                    Amount = amount,
+                    PaidAmount = paidAmount,
+                    Balance = balance,
+                    DueDate = dueDate.Value.ToString("yyyy-MM-dd"),
+                    IssuedAt = issuedAt?.ToString("yyyy-MM-dd") ?? dueDate.Value.ToString("yyyy-MM-dd"),
+                    InstallmentNumber = installmentNumber,
+                    TotalInstallments = totalInstallments,
+                    Status = reader["status"]?.ToString() ?? "A",
+                    DaysOverdue = daysOverdue,
+                    IsOverdue = isOverdue,
+                    DocumentNumber = reader.IsDBNull(reader.GetOrdinal("document_number")) 
+                        ? null 
+                        : reader["document_number"].ToString()?.Trim(),
+                    Description = reader.IsDBNull(reader.GetOrdinal("description")) 
+                        ? null 
+                        : reader["description"].ToString()?.Trim(),
+                    Customer = new CustomerData
+                    {
+                        IdExt = reader["customer_id"].ToString()!,
+                        Name = reader["customer_name"].ToString()!,
+                        Cpf = customerCpf,
+                        Cnpj = customerCnpj,
+                        Email = reader.IsDBNull(reader.GetOrdinal("customer_email")) 
+                            ? null 
+                            : reader["customer_email"].ToString(),
+                        Phone = reader.IsDBNull(reader.GetOrdinal("customer_phone")) 
+                            ? null 
+                            : reader["customer_phone"].ToString()
+                    }
+                };
+
+                receivables.Add(payload);
+
+                var overdueLabel = isOverdue ? $" ⚠️ VENCIDO há {daysOverdue} dias" : "";
+                Log.Debug($"Título encontrado: {eventId} - Valor: {amount:C} - Venc: {dueDate.Value:dd/MM/yyyy}{overdueLabel}");
+            }
+
+            Log.Information($"📋 Encontrados {receivables.Count} títulos a receber para sincronizar");
+            
+            var overdueCount = receivables.Count(r => r.IsOverdue);
+            if (overdueCount > 0)
+            {
+                Log.Warning($"⚠️ {overdueCount} títulos estão vencidos!");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro ao buscar títulos a receber do banco de dados");
+            throw;
+        }
+
+        return receivables;
+    }
+
+    /// <summary>
     /// Testa a conexão com o banco de dados (somente leitura)
     /// </summary>
     public async Task<bool> TestConnectionAsync()

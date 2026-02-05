@@ -4,32 +4,55 @@ using ClubeFlex.Integrador.Models;
 
 namespace ClubeFlex.Integrador.Services;
 
+/// <summary>
+/// Serviço de sincronização multi-projeto
+/// Envia dados do ERP para múltiplos projetos Lovable simultaneamente
+/// </summary>
 public class SyncService
 {
     private readonly DatabaseService _databaseService;
-    private readonly ClubeFlexApiService _apiService;
-    private readonly CloudSyncLogService _cloudSyncLogService;
+    private readonly List<ProjectConfig> _projects;
     private readonly int _maxRetries;
     private readonly int _retryDelaySeconds;
     private readonly bool _testMode;
     private readonly int _testModeLimit;
     private readonly DateTime? _syncFromDate;
     
-    // Contadores para rastreamento de execução
-    private int _totalInvoiceCount;
-    private int _totalPaymentCount;
-    private int _totalSuccessCount;
-    private int _totalErrorCount;
+    // Serviços por projeto (inicializados sob demanda)
+    private readonly Dictionary<string, ProjectApiService> _apiServices = new();
+    private readonly Dictionary<string, ProjectSyncLogService> _syncLogServices = new();
 
-    public SyncService(
-        DatabaseService databaseService,
-        ClubeFlexApiService apiService,
-        CloudSyncLogService cloudSyncLogService,
-        IConfiguration configuration)
+    public SyncService(DatabaseService databaseService, IConfiguration configuration)
     {
         _databaseService = databaseService;
-        _apiService = apiService;
-        _cloudSyncLogService = cloudSyncLogService;
+        
+        // Carregar configurações de múltiplos projetos
+        _projects = configuration.GetSection("Projects").Get<List<ProjectConfig>>() ?? new List<ProjectConfig>();
+        
+        // Se não houver configuração multi-projeto, tentar carregar configuração legacy
+        if (_projects.Count == 0)
+        {
+            var legacyConfig = LoadLegacyConfig(configuration);
+            if (legacyConfig != null)
+            {
+                _projects.Add(legacyConfig);
+            }
+        }
+        
+        // Validar projetos
+        foreach (var project in _projects)
+        {
+            if (project.IsValid())
+            {
+                Log.Information($"📦 Projeto configurado: {project.Name} - Sincroniza: {project.GetSyncDescription()}");
+            }
+            else
+            {
+                Log.Warning($"⚠️ Projeto {project.Name} tem configuração inválida e será ignorado");
+            }
+        }
+        
+        // Configurações gerais de sync
         _maxRetries = int.TryParse(configuration["SyncSettings:RetryAttempts"], out var retries) ? retries : 3;
         _retryDelaySeconds = int.TryParse(configuration["SyncSettings:RetryDelaySeconds"], out var delay) ? delay : 30;
         _testMode = bool.TryParse(configuration["SyncSettings:TestMode"], out var testMode) && testMode;
@@ -40,24 +63,14 @@ public class SyncService
         {
             if (syncFromDateStr.Equals("TODAY", StringComparison.OrdinalIgnoreCase))
             {
-                // Buscar de ONTEM até hoje para garantir que não perdemos dados
                 _syncFromDate = DateTime.Today.AddDays(-1);
-                Log.Information($"🔄 Configurado para sincronizar dados de ontem até hoje: {_syncFromDate.Value:dd/MM/yyyy} - {DateTime.Today:dd/MM/yyyy}");
+                Log.Information($"🔄 Sincronizando dados de ontem até hoje: {_syncFromDate.Value:dd/MM/yyyy} - {DateTime.Today:dd/MM/yyyy}");
             }
             else if (DateTime.TryParse(syncFromDateStr, out var date))
             {
                 _syncFromDate = date;
                 Log.Information($"📅 Sincronizando apenas registros a partir de {_syncFromDate.Value:dd/MM/yyyy}");
             }
-            else
-            {
-                _syncFromDate = null;
-                Log.Warning($"⚠️ Valor inválido para SyncFromDate: '{syncFromDateStr}' - Sincronizando todos os registros");
-            }
-        }
-        else
-        {
-            _syncFromDate = null;
         }
 
         if (_testMode)
@@ -65,84 +78,398 @@ public class SyncService
     }
 
     /// <summary>
-    /// Executa sincronização completa (faturas + pagamentos)
+    /// Carrega configuração no formato antigo (ClubeFlexApi) para compatibilidade
+    /// </summary>
+    private ProjectConfig? LoadLegacyConfig(IConfiguration configuration)
+    {
+        var baseUrl = configuration["ClubeFlexApi:BaseUrl"];
+        var apiKey = configuration["ClubeFlexApi:ApiKey"];
+        
+        if (string.IsNullOrEmpty(baseUrl) || string.IsNullOrEmpty(apiKey))
+            return null;
+        
+        Log.Information("📌 Usando configuração legacy (ClubeFlexApi)");
+        
+        return new ProjectConfig
+        {
+            Name = "ClubeFlex",
+            BaseUrl = baseUrl,
+            ApiKey = apiKey,
+            SyncInvoices = true,
+            SyncPayments = true,
+            SyncReceivables = false
+        };
+    }
+
+    /// <summary>
+    /// Obtém ou cria serviço de API para um projeto
+    /// </summary>
+    private ProjectApiService GetApiService(ProjectConfig project)
+    {
+        if (!_apiServices.ContainsKey(project.Name))
+        {
+            _apiServices[project.Name] = new ProjectApiService(project);
+        }
+        return _apiServices[project.Name];
+    }
+
+    /// <summary>
+    /// Obtém ou cria serviço de logs para um projeto
+    /// </summary>
+    private ProjectSyncLogService GetSyncLogService(ProjectConfig project)
+    {
+        if (!_syncLogServices.ContainsKey(project.Name))
+        {
+            _syncLogServices[project.Name] = new ProjectSyncLogService(project);
+        }
+        return _syncLogServices[project.Name];
+    }
+
+    /// <summary>
+    /// Executa sincronização completa para todos os projetos configurados
     /// </summary>
     public async Task ExecuteSyncAsync()
     {
-        // Resetar contadores
-        _totalInvoiceCount = 0;
-        _totalPaymentCount = 0;
-        _totalSuccessCount = 0;
-        _totalErrorCount = 0;
+        var validProjects = _projects.Where(p => p.IsValid()).ToList();
         
+        if (validProjects.Count == 0)
+        {
+            Log.Fatal("Nenhum projeto válido configurado. Verifique o appsettings.json");
+            return;
+        }
+
+        Log.Information($"=== Iniciando Sincronização para {validProjects.Count} projeto(s) ===");
+
+        // Testar conexão com o banco uma vez
+        var dbOk = await _databaseService.TestConnectionAsync();
+        if (!dbOk)
+        {
+            Log.Fatal("Falha na conexão com o banco de dados. Abortando.");
+            return;
+        }
+
+        // Sincronizar cada projeto
+        foreach (var project in validProjects)
+        {
+            await SyncProjectAsync(project);
+        }
+
+        Log.Information("=== Sincronização Finalizada ===");
+    }
+
+    /// <summary>
+    /// Sincroniza um projeto específico
+    /// </summary>
+    private async Task SyncProjectAsync(ProjectConfig project)
+    {
+        Log.Information($"");
+        Log.Information($"════════════════════════════════════════════════════");
+        Log.Information($"  📦 Projeto: {project.Name}");
+        Log.Information($"  📋 Sincroniza: {project.GetSyncDescription()}");
+        Log.Information($"════════════════════════════════════════════════════");
+
+        var apiService = GetApiService(project);
+        var syncLogService = GetSyncLogService(project);
+        
+        // Testar conectividade com a API do projeto
+        var apiOk = await apiService.TestConnectionAsync();
+        if (!apiOk)
+        {
+            Log.Error($"[{project.Name}] Falha na conectividade. Pulando este projeto.");
+            return;
+        }
+
         // Iniciar rastreamento de execução
-        await _cloudSyncLogService.StartExecutionAsync();
-        
+        await syncLogService.StartExecutionAsync();
+
+        var counters = new SyncCounters();
+
         try
         {
-            Log.Information("=== Iniciando Teste de Conectividade ===");
-
-            // Testar conexões
-            var dbOk = await _databaseService.TestConnectionAsync();
-            var apiOk = await _apiService.TestConnectionAsync();
-
-            if (!dbOk || !apiOk)
+            // Sincronizar faturas se habilitado
+            if (project.SyncInvoices)
             {
-                Log.Fatal("Falha nos testes de conectividade. Abortando sincronização.");
-                await _cloudSyncLogService.FinishExecutionAsync("failed", 0, 0, 0, 0, 0);
-                return;
+                await SyncInvoicesForProjectAsync(project, apiService, syncLogService, counters);
             }
 
-            Log.Information("=== Sincronizando Faturas Criadas ===");
-            await SyncInvoicesAsync();
+            // Sincronizar pagamentos se habilitado
+            if (project.SyncPayments)
+            {
+                await SyncPaymentsForProjectAsync(project, apiService, syncLogService, counters);
+            }
 
-            Log.Information("=== Sincronizando Pagamentos Confirmados ===");
-            await SyncPaymentsAsync();
+            // Sincronizar títulos a receber se habilitado
+            if (project.SyncReceivables)
+            {
+                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters);
+            }
 
-            Log.Information("=== Sincronização Finalizada ===");
+            // Finalizar execução
+            var totalEvents = counters.InvoiceCount + counters.PaymentCount + counters.ReceivableCount;
+            var status = counters.ErrorCount > 0 ? "completed_with_errors" : "completed";
             
-            var totalEvents = _totalInvoiceCount + _totalPaymentCount;
-            var status = _totalErrorCount > 0 ? "completed" : "completed";
-            
-            await _cloudSyncLogService.FinishExecutionAsync(
+            await syncLogService.FinishExecutionAsync(
                 status, 
                 totalEvents, 
-                _totalSuccessCount, 
-                _totalErrorCount, 
-                _totalInvoiceCount, 
-                _totalPaymentCount
+                counters.SuccessCount, 
+                counters.ErrorCount, 
+                counters.InvoiceCount, 
+                counters.PaymentCount
             );
+
+            Log.Information($"[{project.Name}] ✅ Concluído: {counters.SuccessCount} sucesso, {counters.ErrorCount} erros");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Erro durante a sincronização");
-            await _cloudSyncLogService.FinishExecutionAsync(
+            Log.Error(ex, $"[{project.Name}] Erro durante sincronização");
+            await syncLogService.FinishExecutionAsync(
                 "failed", 
-                _totalInvoiceCount + _totalPaymentCount, 
-                _totalSuccessCount, 
-                _totalErrorCount, 
-                _totalInvoiceCount, 
-                _totalPaymentCount
+                counters.InvoiceCount + counters.PaymentCount + counters.ReceivableCount, 
+                counters.SuccessCount, 
+                counters.ErrorCount, 
+                counters.InvoiceCount, 
+                counters.PaymentCount
             );
-            throw;
         }
     }
 
     /// <summary>
-    /// Atualiza tipos de movimento das faturas existentes
+    /// Sincroniza faturas para um projeto específico
+    /// </summary>
+    private async Task SyncInvoicesForProjectAsync(
+        ProjectConfig project, 
+        ProjectApiService apiService, 
+        ProjectSyncLogService syncLogService,
+        SyncCounters counters)
+    {
+        Log.Information($"[{project.Name}] === Sincronizando Faturas ===");
+        
+        try
+        {
+            var syncedInvoices = await syncLogService.GetSuccessfulEventIdsAsync("fatura");
+            var limit = _testMode ? _testModeLimit : (int?)null;
+            var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate, syncedInvoices);
+
+            if (invoices.Count == 0)
+            {
+                Log.Information($"[{project.Name}] Nenhuma fatura nova para sincronizar");
+                return;
+            }
+
+            Log.Information($"[{project.Name}] Encontradas {invoices.Count} novas faturas");
+
+            foreach (var invoice in invoices)
+            {
+                var result = await SendWithRetryAsync(
+                    async () => await apiService.SendInvoiceCreatedAsync(invoice),
+                    invoice.EventId,
+                    project.Name
+                );
+
+                var log = new SyncLog
+                {
+                    EventId = invoice.EventId,
+                    EventType = "fatura-criada",
+                    Status = result.Success ? "success" : "error",
+                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(invoice),
+                    ErrorMessage = result.ErrorMessage,
+                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
+                };
+
+                await syncLogService.SaveSyncLogAsync(log);
+
+                counters.InvoiceCount++;
+                if (result.Success)
+                    counters.SuccessCount++;
+                else
+                    counters.ErrorCount++;
+            }
+
+            Log.Information($"[{project.Name}] Faturas: {counters.InvoiceCount - counters.ErrorCount} sucesso, {counters.ErrorCount} erros");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar faturas");
+        }
+    }
+
+    /// <summary>
+    /// Sincroniza pagamentos para um projeto específico
+    /// </summary>
+    private async Task SyncPaymentsForProjectAsync(
+        ProjectConfig project, 
+        ProjectApiService apiService, 
+        ProjectSyncLogService syncLogService,
+        SyncCounters counters)
+    {
+        Log.Information($"[{project.Name}] === Sincronizando Pagamentos ===");
+        
+        try
+        {
+            var syncedPayments = await syncLogService.GetSuccessfulEventIdsAsync("pagamento");
+            var limit = _testMode ? _testModeLimit : (int?)null;
+            
+            // Buscar todos os tipos de pagamento
+            var creditPayments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate, syncedPayments);
+            var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate, syncedPayments);
+            var clearedChecks = await _databaseService.GetClearedChecksAsync(limit, _syncFromDate, syncedPayments);
+            
+            var allPayments = creditPayments.Concat(cashPayments).Concat(clearedChecks).ToList();
+
+            if (allPayments.Count == 0)
+            {
+                Log.Information($"[{project.Name}] Nenhum pagamento novo para sincronizar");
+                return;
+            }
+
+            Log.Information($"[{project.Name}] 📊 Total de pagamentos: {allPayments.Count}");
+            Log.Information($"[{project.Name}]    - A prazo: {creditPayments.Count}");
+            Log.Information($"[{project.Name}]    - À vista: {cashPayments.Count}");
+            Log.Information($"[{project.Name}]    - Cheques: {clearedChecks.Count}");
+
+            int paymentSuccess = 0;
+            int paymentErrors = 0;
+
+            foreach (var payment in allPayments)
+            {
+                var result = await SendWithRetryAsync(
+                    async () => await apiService.SendPaymentConfirmedAsync(payment),
+                    payment.EventId,
+                    project.Name
+                );
+
+                var log = new SyncLog
+                {
+                    EventId = payment.EventId,
+                    EventType = "pagamento-confirmado",
+                    Status = result.Success ? "success" : "error",
+                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
+                    ErrorMessage = result.ErrorMessage,
+                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
+                };
+
+                await syncLogService.SaveSyncLogAsync(log);
+
+                counters.PaymentCount++;
+                if (result.Success)
+                {
+                    counters.SuccessCount++;
+                    paymentSuccess++;
+                }
+                else
+                {
+                    counters.ErrorCount++;
+                    paymentErrors++;
+                }
+            }
+
+            Log.Information($"[{project.Name}] ✅ Pagamentos: {paymentSuccess} sucesso, {paymentErrors} erros");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar pagamentos");
+        }
+    }
+
+    /// <summary>
+    /// Sincroniza títulos a receber para um projeto específico (Sistema de Cobranças)
+    /// </summary>
+    private async Task SyncReceivablesForProjectAsync(
+        ProjectConfig project, 
+        ProjectApiService apiService, 
+        ProjectSyncLogService syncLogService,
+        SyncCounters counters)
+    {
+        Log.Information($"[{project.Name}] === Sincronizando Títulos a Receber ===");
+        
+        try
+        {
+            var syncedReceivables = await syncLogService.GetSuccessfulEventIdsAsync("titulo");
+            var limit = _testMode ? _testModeLimit : (int?)null;
+            
+            var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, syncedReceivables);
+
+            if (receivables.Count == 0)
+            {
+                Log.Information($"[{project.Name}] Nenhum título novo para sincronizar");
+                return;
+            }
+
+            Log.Information($"[{project.Name}] 📋 Encontrados {receivables.Count} títulos a receber");
+            
+            var overdueCount = receivables.Count(r => r.IsOverdue);
+            if (overdueCount > 0)
+            {
+                Log.Warning($"[{project.Name}] ⚠️ {overdueCount} títulos estão vencidos!");
+            }
+
+            int receivableSuccess = 0;
+            int receivableErrors = 0;
+
+            foreach (var receivable in receivables)
+            {
+                var result = await SendWithRetryAsync(
+                    async () => await apiService.SendReceivableAsync(receivable),
+                    receivable.EventId,
+                    project.Name
+                );
+
+                var log = new SyncLog
+                {
+                    EventId = receivable.EventId,
+                    EventType = "titulo-criado",
+                    Status = result.Success ? "success" : "error",
+                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(receivable),
+                    ErrorMessage = result.ErrorMessage,
+                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
+                };
+
+                await syncLogService.SaveSyncLogAsync(log);
+
+                counters.ReceivableCount++;
+                if (result.Success)
+                {
+                    counters.SuccessCount++;
+                    receivableSuccess++;
+                }
+                else
+                {
+                    counters.ErrorCount++;
+                    receivableErrors++;
+                }
+            }
+
+            Log.Information($"[{project.Name}] ✅ Títulos: {receivableSuccess} sucesso, {receivableErrors} erros");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar títulos a receber");
+        }
+    }
+
+    /// <summary>
+    /// Atualiza tipos de movimento das faturas existentes (para o primeiro projeto com SyncInvoices)
     /// </summary>
     public async Task UpdateInvoiceTypesAsync()
     {
         Log.Information("=== Atualizando Tipos de Movimento das Faturas ===");
 
+        var projectWithInvoices = _projects.FirstOrDefault(p => p.IsValid() && p.SyncInvoices);
+        if (projectWithInvoices == null)
+        {
+            Log.Error("Nenhum projeto configurado para sincronizar faturas");
+            return;
+        }
+
         try
         {
             var dbOk = await _databaseService.TestConnectionAsync();
-            var apiOk = await _apiService.TestConnectionAsync();
+            var apiService = GetApiService(projectWithInvoices);
+            var apiOk = await apiService.TestConnectionAsync();
 
             if (!dbOk || !apiOk)
             {
-                Log.Fatal("Falha nos testes de conectividade. Abortando atualização.");
+                Log.Fatal("Falha nos testes de conectividade. Abortando.");
                 return;
             }
 
@@ -156,7 +483,7 @@ public class SyncService
 
             Log.Information($"Encontradas {invoiceTypes.Count} faturas para classificar");
 
-            var result = await _apiService.UpdateInvoiceTypesAsync(invoiceTypes);
+            var result = await apiService.UpdateInvoiceTypesAsync(invoiceTypes);
 
             if (result.Success)
             {
@@ -174,151 +501,9 @@ public class SyncService
     }
 
     /// <summary>
-    /// Sincroniza faturas criadas
-    /// </summary>
-    private async Task SyncInvoicesAsync()
-    {
-        try
-        {
-            // Consultar faturas já sincronizadas
-            var syncedInvoices = await _cloudSyncLogService.GetSuccessfulEventIdsAsync("fatura");
-            
-            var limit = _testMode ? _testModeLimit : (int?)null;
-            var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate, syncedInvoices);
-
-            if (invoices.Count == 0)
-            {
-                Log.Information("Nenhuma fatura nova para sincronizar");
-                return;
-            }
-
-            Log.Information($"Encontradas {invoices.Count} novas faturas para sincronizar");
-
-            int success = 0;
-            int errors = 0;
-
-            foreach (var invoice in invoices)
-            {
-                var result = await SendWithRetryAsync(
-                    async () => await _apiService.SendInvoiceCreatedAsync(invoice),
-                    invoice.EventId
-                );
-
-                var log = new SyncLog
-                {
-                    EventId = invoice.EventId,
-                    EventType = "fatura-criada",
-                    Status = result.Success ? "success" : "error",
-                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(invoice),
-                    ErrorMessage = result.ErrorMessage,
-                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
-                };
-
-                await _cloudSyncLogService.SaveSyncLogAsync(log);
-
-                _totalInvoiceCount++;
-                if (result.Success)
-                {
-                    success++;
-                    _totalSuccessCount++;
-                }
-                else
-                {
-                    errors++;
-                    _totalErrorCount++;
-                }
-            }
-
-            Log.Information($"Faturas processadas: {success} sucesso, {errors} erros");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Erro ao sincronizar faturas");
-        }
-    }
-
-    /// <summary>
-    /// Sincroniza pagamentos confirmados (a prazo + à vista)
-    /// </summary>
-    private async Task SyncPaymentsAsync()
-    {
-        try
-        {
-            // Consultar pagamentos já sincronizados
-            var syncedPayments = await _cloudSyncLogService.GetSuccessfulEventIdsAsync("pagamento");
-            
-            var limit = _testMode ? _testModeLimit : (int?)null;
-            
-            // Buscar pagamentos a prazo (CONTARECEBERREC)
-            var creditPayments = await _databaseService.GetNewPaymentsAsync(limit, _syncFromDate, syncedPayments);
-            
-            // Buscar pagamentos à vista (MOVENDAREC)
-            var cashPayments = await _databaseService.GetCashPaymentsAsync(limit, _syncFromDate, syncedPayments);
-            
-            // Buscar cheques compensados (CHEQUES)
-            var clearedChecks = await _databaseService.GetClearedChecksAsync(limit, _syncFromDate, syncedPayments);
-            
-            // Combinar todas as listas
-            var allPayments = creditPayments.Concat(cashPayments).Concat(clearedChecks).ToList();
-
-            if (allPayments.Count == 0)
-            {
-                Log.Information("Nenhum pagamento novo para sincronizar");
-                return;
-            }
-
-            Log.Information($"📊 Total de pagamentos encontrados: {allPayments.Count}");
-            Log.Information($"   - Pagamentos a prazo (CONTARECEBERREC): {creditPayments.Count}");
-            Log.Information($"   - Pagamentos à vista (MOVENDAREC): {cashPayments.Count}");
-            Log.Information($"   - Cheques compensados (CHEQUES): {clearedChecks.Count}");
-
-            int success = 0;
-            int errors = 0;
-
-            foreach (var payment in allPayments)
-            {
-                var result = await SendWithRetryAsync(
-                    async () => await _apiService.SendPaymentConfirmedAsync(payment),
-                    payment.EventId
-                );
-
-                var log = new SyncLog
-                {
-                    EventId = payment.EventId,
-                    EventType = "pagamento-confirmado",
-                    Status = result.Success ? "success" : "error",
-                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
-                    ErrorMessage = result.ErrorMessage,
-                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
-                };
-
-                await _cloudSyncLogService.SaveSyncLogAsync(log);
-
-                _totalPaymentCount++;
-                if (result.Success)
-                {
-                    success++;
-                    _totalSuccessCount++;
-                }
-                else
-                {
-                    errors++;
-                    _totalErrorCount++;
-                }
-            }
-
-            Log.Information($"✅ Pagamentos processados: {success} sucesso, {errors} erros");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Erro ao sincronizar pagamentos");
-        }
-    }
-
-    /// <summary>
     /// Envia com retry automático em caso de falha
     /// </summary>
-    private async Task<ApiResponse> SendWithRetryAsync(Func<Task<ApiResponse>> sendAction, string eventId)
+    private async Task<ApiResponse> SendWithRetryAsync(Func<Task<ApiResponse>> sendAction, string eventId, string projectName)
     {
         for (int attempt = 1; attempt <= _maxRetries; attempt++)
         {
@@ -329,23 +514,21 @@ public class SyncService
                 if (result.Success)
                     return result;
 
-                // Se é erro de validação, não retenta
                 if (result.IsValidationError)
                 {
-                    Log.Warning($"❌ Erro de validação detectado para {eventId}. Não será retentado.");
+                    Log.Warning($"[{projectName}] ❌ Erro de validação para {eventId}. Não será retentado.");
                     return result;
                 }
 
-                // Se é erro técnico e ainda tem tentativas, aguarda e retenta
                 if (attempt < _maxRetries)
                 {
-                    Log.Warning($"Tentativa {attempt}/{_maxRetries} falhou para {eventId}. Aguardando {_retryDelaySeconds}s...");
+                    Log.Warning($"[{projectName}] Tentativa {attempt}/{_maxRetries} falhou para {eventId}. Aguardando {_retryDelaySeconds}s...");
                     await Task.Delay(_retryDelaySeconds * 1000);
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, $"Erro na tentativa {attempt} para {eventId}");
+                Log.Error(ex, $"[{projectName}] Erro na tentativa {attempt} para {eventId}");
                 
                 if (attempt >= _maxRetries)
                 {
@@ -360,11 +543,23 @@ public class SyncService
             }
         }
 
-        Log.Error($"Todas as {_maxRetries} tentativas falharam para {eventId}");
+        Log.Error($"[{projectName}] Todas as {_maxRetries} tentativas falharam para {eventId}");
         return new ApiResponse 
         { 
             Success = false, 
             ErrorMessage = "Falha após todas as tentativas" 
         };
+    }
+
+    /// <summary>
+    /// Contadores de sincronização por projeto
+    /// </summary>
+    private class SyncCounters
+    {
+        public int InvoiceCount { get; set; }
+        public int PaymentCount { get; set; }
+        public int ReceivableCount { get; set; }
+        public int SuccessCount { get; set; }
+        public int ErrorCount { get; set; }
     }
 }
