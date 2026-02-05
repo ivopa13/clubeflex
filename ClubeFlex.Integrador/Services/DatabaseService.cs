@@ -634,7 +634,7 @@ public class DatabaseService
         var receivables = new List<TituloPayload>();
 
         var batchSize = limit ?? 100;
-        var dateFilter = fromDate.HasValue ? $"AND cr.VENCIMENTO >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+        var dateFilter = fromDate.HasValue ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         var query = $@"
             SELECT FIRST {batchSize}
@@ -647,19 +647,21 @@ public class DatabaseService
                 c.EMAIL as customer_email,
                 c.TELEFONE as customer_phone,
                 cr.VALOR as amount,
-                cr.VALORPAGO as paid_amount,
-                cr.VENCIMENTO as due_date,
-                cr.DATAEMISSAO as issued_at,
+                COALESCE(cr.TOTPAGO, 0) as paid_amount,
+                cr.DATVENC as due_date,
+                cr.DATENTR as issued_at,
                 cr.PARCELA as installment_number,
-                cr.TOTALPARCELAS as total_installments,
                 cr.NUMDOC as document_number,
-                cr.OBS as description
+                cr.OBS as description,
+                cr.FLAGPAGO as flag_pago,
+                cr.FLAGCANCELADA as flag_cancelada
             FROM CONTARECEBER cr
             INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
-            WHERE cr.VALOR > cr.VALORPAGO
+            WHERE COALESCE(cr.FLAGPAGO, 'N') = 'N'
+            AND COALESCE(cr.FLAGCANCELADA, 'N') = 'N'
             AND cr.VALOR > 0
             {dateFilter}
-            ORDER BY cr.VENCIMENTO ASC, cr.CODCR ASC";
+            ORDER BY cr.DATVENC ASC, cr.CODCR ASC";
 
         try
         {
@@ -712,13 +714,11 @@ public class DatabaseService
                     ? null 
                     : reader["customer_cnpj"].ToString()?.Trim();
 
-                // Parcela/Total
+                // Parcela (não temos TOTALPARCELAS, usar 1 como default)
                 var installmentNumber = reader.IsDBNull(reader.GetOrdinal("installment_number")) 
                     ? 1 
                     : Convert.ToInt32(reader["installment_number"]);
-                var totalInstallments = reader.IsDBNull(reader.GetOrdinal("total_installments")) 
-                    ? 1 
-                    : Convert.ToInt32(reader["total_installments"]);
+                var totalInstallments = 1; // Campo não existe na tabela, usar 1
 
                 var payload = new TituloPayload
                 {
@@ -734,7 +734,7 @@ public class DatabaseService
                     IssuedAt = issuedAt?.ToString("yyyy-MM-dd") ?? dueDate.Value.ToString("yyyy-MM-dd"),
                     InstallmentNumber = installmentNumber,
                     TotalInstallments = totalInstallments,
-                    Status = reader["status"]?.ToString() ?? "A",
+                    Status = "A", // Em aberto (filtrado pela query)
                     DaysOverdue = daysOverdue,
                     IsOverdue = isOverdue,
                     DocumentNumber = reader.IsDBNull(reader.GetOrdinal("document_number")) 
