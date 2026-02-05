@@ -1,181 +1,71 @@
-# Integrador Multi-Projeto - Implementação Concluída ✅
 
-## Status: IMPLEMENTADO
+# Atualizar Integrador com Credenciais do Projeto Financeiro
 
-O integrador C# (`ClubeFlex.Integrador`) foi atualizado para v2.0 com suporte a múltiplos projetos Lovable simultaneamente.
+## Objetivo
 
----
+Atualizar o arquivo `appsettings.json` do integrador C# com as credenciais do novo projeto **Financeiro** para habilitar a sincronização de títulos a receber (CONTARECEBER).
 
-## Arquivos Criados
+## Credenciais Recebidas
 
-| Arquivo | Descrição |
-|---------|-----------|
-| `Models/ProjectConfig.cs` | Configuração por projeto (Name, BaseUrl, ApiKey, flags de sync) |
-| `Models/TituloPayload.cs` | Payload para títulos a receber (CONTARECEBER) |
-| `Services/ProjectApiService.cs` | Serviço de API genérico por projeto |
-| `Services/ProjectSyncLogService.cs` | Serviço de logs por projeto |
+| Campo | Valor |
+|-------|-------|
+| Project ID | `njjybkxugplmsexvqqtu` |
+| Anon Key | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qanlia3h1Z3BsbXNleHZxcXR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyNzI0NTAsImV4cCI6MjA4NTg0ODQ1MH0.FFXM7302I48-TuOTw9zIqflGmjrr1U7Oz7fLsUQjVps` |
+| Base URL | `https://njjybkxugplmsexvqqtu.supabase.co/functions/v1` |
 
-## Arquivos Modificados
+## Alteracao
 
-| Arquivo | Mudanças |
-|---------|----------|
-| `appsettings.json` | Novo formato com array `Projects[]` |
-| `Services/DatabaseService.cs` | Adicionado `GetReceivablesAsync()` para CONTARECEBER |
-| `Services/SyncService.cs` | Refatorado completamente para multi-projeto |
-| `Program.cs` | Atualizado para v2.0 |
-| `README.md` | Documentação atualizada |
-
----
-
-## Como Funciona
-
-### Configuração Multi-Projeto
+Atualizar o arquivo `ClubeFlex.Integrador/appsettings.json`:
 
 ```json
 {
+  "ConnectionStrings": {
+    "LocalDatabase": "DataSource=localhost;Database=C:\\CPlus\\CPlus.fdb;User=SYSDBA;Password=masterkey;Charset=NONE;ServerType=0;"
+  },
   "Projects": [
     {
       "Name": "ClubeFlex",
-      "BaseUrl": "https://xxx.supabase.co/functions/v1",
-      "ApiKey": "...",
+      "BaseUrl": "https://skhljdaqfzweshjrlcnn.supabase.co/functions/v1",
+      "ApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
       "SyncInvoices": true,
       "SyncPayments": true,
       "SyncReceivables": false
     },
     {
-      "Name": "SistemaCobrancas",
-      "BaseUrl": "https://yyy.supabase.co/functions/v1",
-      "ApiKey": "...",
+      "Name": "Financeiro",
+      "BaseUrl": "https://njjybkxugplmsexvqqtu.supabase.co/functions/v1",
+      "ApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
       "SyncInvoices": false,
       "SyncPayments": false,
       "SyncReceivables": true
     }
-  ]
+  ],
+  "SyncSettings": { ... }
 }
 ```
 
-### Opções de Sincronização
+## Secao Tecnica
 
-| Flag | Descrição | Tabelas CPlus |
-|------|-----------|---------------|
-| `SyncInvoices` | Faturas/vendas | MOVENDA, CLIENTE, TRANSPORTADORA |
-| `SyncPayments` | Pagamentos | CONTARECEBERREC, MOVENDAREC, CHEQUES |
-| `SyncReceivables` | Títulos a receber | CONTARECEBER, CLIENTE |
+### Arquivo Modificado
 
-### Fluxo de Execução
+| Arquivo | Alteracao |
+|---------|-----------|
+| `ClubeFlex.Integrador/appsettings.json` | Atualizar projeto "SistemaCobrancas" para "Financeiro" com credenciais reais |
 
-```
-1. Carrega configurações
-2. Para cada projeto válido:
-   a. Testa conectividade com API
-   b. Inicia rastreamento de execução
-   c. Se SyncInvoices → sincroniza MOVENDA
-   d. Se SyncPayments → sincroniza CONTARECEBERREC + MOVENDAREC + CHEQUES
-   e. Se SyncReceivables → sincroniza CONTARECEBER
-   f. Finaliza execução com estatísticas
-3. Gera logs consolidados
-```
+### Configuracao Final
 
----
+O projeto **Financeiro** ficara configurado para:
 
-## Próximos Passos para Novo Projeto
+- `SyncInvoices: false` - Nao sincroniza faturas (isso e do ClubeFlex)
+- `SyncPayments: false` - Nao sincroniza pagamentos de pontos
+- `SyncReceivables: true` - Sincroniza titulos a receber (CONTARECEBER)
 
-1. **Criar novo projeto Lovable** para Sistema de Cobranças
-2. **Configurar tabelas** no novo projeto:
-   - `customers` (mesma estrutura)
-   - `receivables` (títulos a receber)
-   - `receivable_payments` (pagamentos de títulos)
-3. **Criar Edge Functions** no novo projeto:
-   - `titulo-criado` - Recebe títulos do ERP
-   - `titulo-pago` - Recebe confirmação de pagamento
-   - `sync-log` - Logs de sincronização
-   - `integrator-execution` - Rastreamento de execuções
-4. **Atualizar appsettings.json** com os dados do novo projeto
-5. **Testar sincronização** em paralelo
+### Proximos Passos Apos Aprovacao
 
----
-
-## Estrutura do Payload de Títulos (TituloPayload)
-
-```json
-{
-  "event_id": "TIT_98765",
-  "source": "erp_windows",
-  "receivable_id_ext": "98765",
-  "invoice_id_ext": "12345",
-  "amount": 500.00,
-  "paid_amount": 0.00,
-  "balance": 500.00,
-  "due_date": "2025-02-15",
-  "issued_at": "2025-01-15",
-  "installment_number": 1,
-  "total_installments": 3,
-  "status": "A",
-  "days_overdue": 0,
-  "is_overdue": false,
-  "customer": {
-    "id_ext": "C001",
-    "name": "João Silva",
-    "cpf": "12345678900",
-    "phone": "(19) 99999-9999"
-  }
-}
-```
-
----
-
-## Compatibilidade
-
-O integrador mantém compatibilidade com a configuração legada:
-
-```json
-{
-  "ClubeFlexApi": {
-    "BaseUrl": "...",
-    "ApiKey": "..."
-  }
-}
-```
-
-Se não houver `Projects[]`, o sistema usa `ClubeFlexApi` como projeto único com `SyncInvoices=true` e `SyncPayments=true`.
-
----
-
-## Estrutura de Tabelas para Novo Projeto
-
-```text
-+------------------+     +----------------------+
-|    customers     |     |     receivables      |
-+------------------+     +----------------------+
-| id (uuid)        |<----| customer_id (uuid)   |
-| customer_id_ext  |     | receivable_id_ext    |
-| name             |     | invoice_id_ext       |
-| doc (cpf/cnpj)   |     | amount               |
-| phone            |     | paid_amount          |
-| email            |     | balance              |
-+------------------+     | due_date             |
-                         | issued_at            |
-                         | installment_number   |
-                         | total_installments   |
-                         | status               |
-                         | days_overdue         |
-                         | is_overdue           |
-                         | created_at           |
-                         +----------------------+
-                                  |
-                                  v
-                    +------------------------+
-                    |  receivable_payments   |
-                    +------------------------+
-                    | receivable_id (uuid)   |
-                    | paid_amount            |
-                    | paid_at                |
-                    | payment_type           |
-                    +------------------------+
-```
-
----
-
-## ✅ Implementação Concluída
-
-O integrador está pronto para receber a configuração do novo projeto quando ele for criado no Lovable.
+1. Atualizar o `appsettings.json` com as credenciais
+2. Garantir que o projeto Financeiro tenha as Edge Functions:
+   - `titulo-criado` - Para receber novos titulos
+   - `titulo-pago` - Para confirmacao de pagamentos
+   - `sync-log` - Para monitoramento
+   - `integrator-execution` - Para logs de execucao
+3. Testar a sincronizacao com o novo projeto
