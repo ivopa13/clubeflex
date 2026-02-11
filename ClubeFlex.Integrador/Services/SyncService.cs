@@ -16,6 +16,7 @@ public class SyncService
     private readonly int _retryDelaySeconds;
     private readonly bool _testMode;
     private readonly int _testModeLimit;
+    private readonly int _batchSize;
     private readonly DateTime? _syncFromDate;
     
     // Serviços por projeto (inicializados sob demanda)
@@ -57,6 +58,9 @@ public class SyncService
         _retryDelaySeconds = int.TryParse(configuration["SyncSettings:RetryDelaySeconds"], out var delay) ? delay : 30;
         _testMode = bool.TryParse(configuration["SyncSettings:TestMode"], out var testMode) && testMode;
         _testModeLimit = int.TryParse(configuration["SyncSettings:TestModeLimit"], out var limit) ? limit : 10;
+        _batchSize = int.TryParse(configuration["SyncSettings:BatchSize"], out var batch) ? batch : 500;
+        
+        Log.Information($"📦 BatchSize configurado: {_batchSize}");
         
         var syncFromDateStr = configuration["SyncSettings:SyncFromDate"];
         if (!string.IsNullOrEmpty(syncFromDateStr))
@@ -393,12 +397,11 @@ public class SyncService
         
         try
         {
-            // Buscar checksums existentes para comparação (em vez de apenas event_ids)
+            // Buscar checksums existentes para comparação
             var existingChecksums = await syncLogService.GetReceivableChecksumsAsync();
-            var limit = _testMode ? _testModeLimit : (int?)null;
+            var limit = _testMode ? _testModeLimit : _batchSize;
             
             // Usar configuração do projeto para ignorar ou não o filtro de data
-            // Para régua de cobrança, é necessário buscar TODOS os títulos em aberto (vencidos + a vencer)
             var ignoreFromDate = project.SyncReceivablesIgnoreDate;
             
             if (ignoreFromDate)
@@ -406,29 +409,45 @@ public class SyncService
                 Log.Information($"[{project.Name}] 📅 SyncReceivablesIgnoreDate = true: Buscando TODOS os títulos em aberto");
             }
             
-            // Passar checksums existentes para comparação - apenas títulos alterados serão retornados
-            var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate);
-
-            if (receivables.Count == 0)
+            // === LOOP DE PAGINAÇÃO: buscar todos os títulos em lotes ===
+            int totalReceivableSuccess = 0;
+            int totalReceivableErrors = 0;
+            int totalReceivables = 0;
+            int batchNumber = 0;
+            
+            while (true)
             {
-                Log.Information($"[{project.Name}] Nenhum título novo ou alterado para sincronizar");
-            }
-            else
-            {
-                Log.Information($"[{project.Name}] 📋 Encontrados {receivables.Count} títulos novos/alterados");
+                batchNumber++;
+                var offset = (batchNumber - 1) * limit;
+                
+                Log.Information($"[{project.Name}] 📦 Buscando lote {batchNumber} (offset {offset}, limit {limit})...");
+                
+                var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset);
+                
+                if (receivables.Count == 0)
+                {
+                    if (batchNumber == 1)
+                    {
+                        Log.Information($"[{project.Name}] Nenhum título novo ou alterado para sincronizar");
+                    }
+                    else
+                    {
+                        Log.Information($"[{project.Name}] ✅ Todos os lotes processados ({batchNumber - 1} lotes)");
+                    }
+                    break;
+                }
+                
+                totalReceivables += receivables.Count;
+                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {receivables.Count} títulos novos/alterados");
                 
                 var overdueCount = receivables.Count(r => r.IsOverdue);
                 if (overdueCount > 0)
                 {
-                    Log.Warning($"[{project.Name}] ⚠️ {overdueCount} títulos estão vencidos!");
+                    Log.Warning($"[{project.Name}] ⚠️ {overdueCount} títulos vencidos neste lote");
                 }
-
-                int receivableSuccess = 0;
-                int receivableErrors = 0;
 
                 foreach (var receivable in receivables)
                 {
-                    // Incluir execution_id no payload
                     receivable.ExecutionId = syncLogService.GetCurrentExecutionId();
 
                     var result = await SendWithRetryAsync(
@@ -453,16 +472,31 @@ public class SyncService
                     if (result.Success)
                     {
                         counters.SuccessCount++;
-                        receivableSuccess++;
+                        totalReceivableSuccess++;
                     }
                     else
                     {
                         counters.ErrorCount++;
-                        receivableErrors++;
+                        totalReceivableErrors++;
                     }
                 }
 
-                Log.Information($"[{project.Name}] ✅ Títulos: {receivableSuccess} sucesso, {receivableErrors} erros");
+                Log.Information($"[{project.Name}] ✅ Lote {batchNumber}: {receivables.Count - totalReceivableErrors} sucesso");
+                
+                // Se retornou menos que o limit, não há mais dados
+                if (receivables.Count < limit)
+                {
+                    Log.Information($"[{project.Name}] ✅ Último lote processado (retornou {receivables.Count} < {limit})");
+                    break;
+                }
+                
+                // Em modo teste, não continuar
+                if (_testMode) break;
+            }
+            
+            if (totalReceivables > 0)
+            {
+                Log.Information($"[{project.Name}] 📊 Total títulos: {totalReceivables} processados, {totalReceivableSuccess} sucesso, {totalReceivableErrors} erros");
             }
 
             // === Sincronizar pagamentos de títulos (titulo-pago) ===
@@ -489,58 +523,89 @@ public class SyncService
         try
         {
             var existingChecksums = await syncLogService.GetReceivablePaymentChecksumsAsync();
-            var limit = _testMode ? _testModeLimit : (int?)null;
+            var limit = _testMode ? _testModeLimit : _batchSize;
 
-            var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate);
-
-            if (payments.Count == 0)
+            // === LOOP DE PAGINAÇÃO para pagamentos de títulos ===
+            int totalPaymentSuccess = 0;
+            int totalPaymentErrors = 0;
+            int totalPayments = 0;
+            int batchNumber = 0;
+            
+            while (true)
             {
-                Log.Information($"[{project.Name}] Nenhum pagamento de título novo ou alterado para sincronizar");
-                return;
+                batchNumber++;
+                var offset = (batchNumber - 1) * limit;
+                
+                Log.Information($"[{project.Name}] 📦 Buscando lote {batchNumber} de pagamentos (offset {offset}, limit {limit})...");
+                
+                var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset);
+
+                if (payments.Count == 0)
+                {
+                    if (batchNumber == 1)
+                    {
+                        Log.Information($"[{project.Name}] Nenhum pagamento de título novo ou alterado para sincronizar");
+                    }
+                    else
+                    {
+                        Log.Information($"[{project.Name}] ✅ Todos os lotes de pagamentos processados ({batchNumber - 1} lotes)");
+                    }
+                    break;
+                }
+
+                totalPayments += payments.Count;
+                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {payments.Count} pagamentos de títulos novos/alterados");
+
+                foreach (var payment in payments)
+                {
+                    payment.ExecutionId = syncLogService.GetCurrentExecutionId();
+
+                    var result = await SendWithRetryAsync(
+                        async () => await apiService.SendReceivablePaymentAsync(payment),
+                        payment.EventId,
+                        project.Name
+                    );
+
+                    var log = new SyncLog
+                    {
+                        EventId = payment.EventId,
+                        EventType = "titulo-pago",
+                        Status = result.Success ? "success" : "error",
+                        Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
+                        ErrorMessage = result.ErrorMessage,
+                        Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
+                    };
+
+                    await syncLogService.SaveSyncLogAsync(log);
+
+                    counters.PaymentCount++;
+                    if (result.Success)
+                    {
+                        counters.SuccessCount++;
+                        totalPaymentSuccess++;
+                    }
+                    else
+                    {
+                        counters.ErrorCount++;
+                        totalPaymentErrors++;
+                    }
+                }
+
+                Log.Information($"[{project.Name}] ✅ Lote {batchNumber} pagamentos: {payments.Count} processados");
+                
+                if (payments.Count < limit)
+                {
+                    Log.Information($"[{project.Name}] ✅ Último lote de pagamentos (retornou {payments.Count} < {limit})");
+                    break;
+                }
+                
+                if (_testMode) break;
             }
-
-            Log.Information($"[{project.Name}] 📋 Encontrados {payments.Count} pagamentos de títulos novos/alterados");
-
-            int paymentSuccess = 0;
-            int paymentErrors = 0;
-
-            foreach (var payment in payments)
+            
+            if (totalPayments > 0)
             {
-                // Incluir execution_id no payload
-                payment.ExecutionId = syncLogService.GetCurrentExecutionId();
-
-                var result = await SendWithRetryAsync(
-                    async () => await apiService.SendReceivablePaymentAsync(payment),
-                    payment.EventId,
-                    project.Name
-                );
-
-                var log = new SyncLog
-                {
-                    EventId = payment.EventId,
-                    EventType = "titulo-pago",
-                    Status = result.Success ? "success" : "error",
-                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
-                    ErrorMessage = result.ErrorMessage,
-                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
-                };
-
-                await syncLogService.SaveSyncLogAsync(log);
-
-                counters.PaymentCount++;
-                if (result.Success)
-                {
-                    counters.SuccessCount++;
-                    paymentSuccess++;
-                }
-                else
-                {
-                    counters.ErrorCount++;
-                    paymentErrors++;
-                }
+                Log.Information($"[{project.Name}] 📊 Total pagamentos de títulos: {totalPayments} processados, {totalPaymentSuccess} sucesso, {totalPaymentErrors} erros");
             }
-
-            Log.Information($"[{project.Name}] ✅ Pagamentos de títulos: {paymentSuccess} sucesso, {paymentErrors} erros");
         }
         catch (Exception ex)
         {
