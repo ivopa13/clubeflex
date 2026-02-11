@@ -131,8 +131,12 @@ public class ProjectApiService
             {
                 Log.Error($"✗ [{_projectName}] Erro ao enviar {description}: {response.StatusCode} - {responseBody}");
                 
-                // Verificar se é erro de validação
-                var isValidationError = false;
+                // Erros 4xx são problemas nos dados - nunca devem ser retentados
+                var statusCode = (int)response.StatusCode;
+                var isClientError = statusCode >= 400 && statusCode < 500;
+                
+                // Verificar se é erro de validação explícito no body
+                var isValidationError = isClientError;
                 string? errorMessage = responseBody;
                 
                 try
@@ -145,6 +149,11 @@ public class ProjectApiService
                     }
                 }
                 catch { }
+
+                if (isClientError)
+                {
+                    Log.Warning($"[{_projectName}] ⚠️ Erro {statusCode} (cliente) para {description} - não será retentado");
+                }
                 
                 return new ApiResponse 
                 { 
