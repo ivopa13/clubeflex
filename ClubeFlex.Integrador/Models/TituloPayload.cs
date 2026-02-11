@@ -107,6 +107,12 @@ public class TituloPayload
     public CustomerData Customer { get; set; } = new();
 
     /// <summary>
+    /// ID da execução do integrador (para rastreamento)
+    /// </summary>
+    [JsonProperty("execution_id")]
+    public string? ExecutionId { get; set; }
+
+    /// <summary>
     /// Checksum MD5 dos campos que podem mudar (Amount, PaidAmount, Balance, Status)
     /// Usado para detectar alterações e evitar sincronização desnecessária
     /// </summary>
@@ -163,4 +169,30 @@ public class TituloPagamentoPayload
     /// </summary>
     [JsonProperty("payment_type")]
     public string PaymentType { get; set; } = "unknown";
+
+    /// <summary>
+    /// ID da execução do integrador (para rastreamento)
+    /// </summary>
+    [JsonProperty("execution_id")]
+    public string? ExecutionId { get; set; }
+
+    /// <summary>
+    /// Checksum MD5 para detectar alterações
+    /// </summary>
+    [JsonProperty("checksum")]
+    public string Checksum { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Calcula o checksum baseado nos campos do pagamento
+    /// </summary>
+    public void CalculateChecksum()
+    {
+        var dataToHash = $"{EventId}|{ReceivableIdExt}|{PaidAmount:F2}|{PaidAt}|{PaymentType}";
+        
+        using var md5 = MD5.Create();
+        var inputBytes = Encoding.UTF8.GetBytes(dataToHash);
+        var hashBytes = md5.ComputeHash(inputBytes);
+        
+        Checksum = Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
 }

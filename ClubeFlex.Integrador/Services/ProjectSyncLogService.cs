@@ -229,6 +229,15 @@ public class ProjectSyncLogService
     }
 
     /// <summary>
+    /// Busca checksums dos pagamentos de títulos já sincronizados para comparação
+    /// Retorna Dictionary com event_id -> checksum
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetReceivablePaymentChecksumsAsync()
+    {
+        return await GetChecksumsAsync("titulo_pagamento", "pagamentos de títulos");
+    }
+
+    /// <summary>
     /// Método genérico para buscar checksums de um tipo de evento
     /// </summary>
     private async Task<Dictionary<string, string>> GetChecksumsAsync(string eventType, string displayName)
