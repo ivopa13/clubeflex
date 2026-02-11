@@ -181,7 +181,7 @@ schtasks /Delete /TN "ClubeFlexSync" /F
 }
 ```
 
-### Título a Receber (titulo-criado) - NOVO!
+### Título a Receber (titulo-criado)
 
 ```json
 {
@@ -199,12 +199,31 @@ schtasks /Delete /TN "ClubeFlexSync" /F
   "status": "A",
   "days_overdue": 0,
   "is_overdue": false,
+  "document_number": "NF 12345",
+  "description": null,
   "customer": {
     "id_ext": "C001",
     "name": "João Silva",
     "cpf": "12345678900",
     "phone": "(19) 99999-9999"
-  }
+  },
+  "execution_id": "EXEC_Financeiro_20260211_100000_abc12345",
+  "checksum": "a1b2c3d4e5f6..."
+}
+```
+
+### Pagamento de Título (titulo-pago)
+
+```json
+{
+  "event_id": "TPAG_98765_001",
+  "source": "erp_windows",
+  "receivable_id_ext": "98765",
+  "paid_amount": 500.00,
+  "paid_at": "2026-02-10",
+  "payment_type": "pix",
+  "execution_id": "EXEC_Financeiro_20260211_100000_abc12345",
+  "checksum": "f6e5d4c3b2a1..."
 }
 ```
 

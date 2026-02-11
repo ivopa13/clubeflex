@@ -893,6 +893,99 @@ public class DatabaseService
     }
 
     /// <summary>
+    /// Busca pagamentos de títulos a receber (CONTARECEBERREC) para sincronização
+    /// Usado pelo sistema de cobranças (Financeiro)
+    /// </summary>
+    public async Task<List<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false)
+    {
+        var payments = new List<TituloPagamentoPayload>();
+
+        var batchSize = limit ?? 500;
+        var dateFilter = (fromDate.HasValue && !ignoreFromDate) 
+            ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" 
+            : "";
+
+        var query = $@"
+            SELECT FIRST {batchSize}
+                crr.ID as payment_id,
+                cr.CODCR as receivable_id,
+                crr.VALOR as paid_amount,
+                crr.DATA as paid_at,
+                TRIM(crr.CODREC) as payment_type_code
+            FROM CONTARECEBERREC crr
+            INNER JOIN CONTARECEBER cr ON crr.CODCR = cr.CODCR
+            WHERE crr.VALOR > 0
+            {dateFilter}
+            ORDER BY crr.DATA DESC, crr.ID DESC";
+
+        int skippedByChecksum = 0;
+
+        try
+        {
+            using var connection = new FbConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new FbCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var paymentId = reader["payment_id"].ToString() ?? "";
+                var receivableId = reader["receivable_id"].ToString() ?? "";
+                var eventId = $"TPAG_{receivableId}_{paymentId}";
+
+                var paymentTypeCode = reader["payment_type_code"]?.ToString();
+                var mappedType = MapPaymentTypeCode(paymentTypeCode);
+
+                var paidAt = SafeParseDateFromFirebird(reader["paid_at"], "paid_at", $"PagTítulo {paymentId}");
+                if (!paidAt.HasValue)
+                {
+                    Log.Warning($"⚠️ Pagamento de título {eventId} ignorado por data inválida");
+                    continue;
+                }
+
+                var payload = new TituloPagamentoPayload
+                {
+                    EventId = eventId,
+                    ReceivableIdExt = receivableId,
+                    PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
+                    PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
+                    PaymentType = mappedType
+                };
+
+                payload.CalculateChecksum();
+
+                if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
+                {
+                    if (existingChecksum == payload.Checksum)
+                    {
+                        Log.Debug($"⏭️ Pagamento de título {eventId} sem alterações (checksum igual)");
+                        skippedByChecksum++;
+                        continue;
+                    }
+                }
+
+                payments.Add(payload);
+                Log.Debug($"Pagamento de título encontrado: {eventId} - Valor: {payload.PaidAmount} - Data: {paidAt.Value:yyyy-MM-dd}");
+            }
+
+            Log.Information($"📋 Encontrados {payments.Count} pagamentos de títulos novos/alterados para sincronizar");
+            
+            if (skippedByChecksum > 0)
+            {
+                Log.Information($"⏭️ {skippedByChecksum} pagamentos de títulos pulados (sem alterações - checksum igual)");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro ao buscar pagamentos de títulos do banco de dados");
+            throw;
+        }
+
+        return payments;
+    }
+
+    /// <summary>
     /// Testa a conexão com o banco de dados (somente leitura)
     /// </summary>
     public async Task<bool> TestConnectionAsync()

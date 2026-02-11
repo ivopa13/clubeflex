@@ -262,6 +262,7 @@ public class SyncService
 
             foreach (var invoice in invoices)
             {
+                // Incluir execution_id no payload (se suportado)
                 var result = await SendWithRetryAsync(
                     async () => await apiService.SendInvoiceCreatedAsync(invoice),
                     invoice.EventId,
@@ -411,58 +412,139 @@ public class SyncService
             if (receivables.Count == 0)
             {
                 Log.Information($"[{project.Name}] Nenhum título novo ou alterado para sincronizar");
+            }
+            else
+            {
+                Log.Information($"[{project.Name}] 📋 Encontrados {receivables.Count} títulos novos/alterados");
+                
+                var overdueCount = receivables.Count(r => r.IsOverdue);
+                if (overdueCount > 0)
+                {
+                    Log.Warning($"[{project.Name}] ⚠️ {overdueCount} títulos estão vencidos!");
+                }
+
+                int receivableSuccess = 0;
+                int receivableErrors = 0;
+
+                foreach (var receivable in receivables)
+                {
+                    // Incluir execution_id no payload
+                    receivable.ExecutionId = syncLogService.GetCurrentExecutionId();
+
+                    var result = await SendWithRetryAsync(
+                        async () => await apiService.SendReceivableAsync(receivable),
+                        receivable.EventId,
+                        project.Name
+                    );
+
+                    var log = new SyncLog
+                    {
+                        EventId = receivable.EventId,
+                        EventType = "titulo-criado",
+                        Status = result.Success ? "success" : "error",
+                        Payload = Newtonsoft.Json.JsonConvert.SerializeObject(receivable),
+                        ErrorMessage = result.ErrorMessage,
+                        Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
+                    };
+
+                    await syncLogService.SaveSyncLogAsync(log);
+
+                    counters.ReceivableCount++;
+                    if (result.Success)
+                    {
+                        counters.SuccessCount++;
+                        receivableSuccess++;
+                    }
+                    else
+                    {
+                        counters.ErrorCount++;
+                        receivableErrors++;
+                    }
+                }
+
+                Log.Information($"[{project.Name}] ✅ Títulos: {receivableSuccess} sucesso, {receivableErrors} erros");
+            }
+
+            // === Sincronizar pagamentos de títulos (titulo-pago) ===
+            await SyncReceivablePaymentsForProjectAsync(project, apiService, syncLogService, counters, ignoreFromDate);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar títulos a receber");
+        }
+    }
+
+    /// <summary>
+    /// Sincroniza pagamentos de títulos a receber para um projeto específico (titulo-pago)
+    /// </summary>
+    private async Task SyncReceivablePaymentsForProjectAsync(
+        ProjectConfig project,
+        ProjectApiService apiService,
+        ProjectSyncLogService syncLogService,
+        SyncCounters counters,
+        bool ignoreFromDate)
+    {
+        Log.Information($"[{project.Name}] === Sincronizando Pagamentos de Títulos ===");
+
+        try
+        {
+            var existingChecksums = await syncLogService.GetReceivablePaymentChecksumsAsync();
+            var limit = _testMode ? _testModeLimit : (int?)null;
+
+            var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate);
+
+            if (payments.Count == 0)
+            {
+                Log.Information($"[{project.Name}] Nenhum pagamento de título novo ou alterado para sincronizar");
                 return;
             }
 
-            Log.Information($"[{project.Name}] 📋 Encontrados {receivables.Count} títulos novos/alterados");
-            
-            var overdueCount = receivables.Count(r => r.IsOverdue);
-            if (overdueCount > 0)
-            {
-                Log.Warning($"[{project.Name}] ⚠️ {overdueCount} títulos estão vencidos!");
-            }
+            Log.Information($"[{project.Name}] 📋 Encontrados {payments.Count} pagamentos de títulos novos/alterados");
 
-            int receivableSuccess = 0;
-            int receivableErrors = 0;
+            int paymentSuccess = 0;
+            int paymentErrors = 0;
 
-            foreach (var receivable in receivables)
+            foreach (var payment in payments)
             {
+                // Incluir execution_id no payload
+                payment.ExecutionId = syncLogService.GetCurrentExecutionId();
+
                 var result = await SendWithRetryAsync(
-                    async () => await apiService.SendReceivableAsync(receivable),
-                    receivable.EventId,
+                    async () => await apiService.SendReceivablePaymentAsync(payment),
+                    payment.EventId,
                     project.Name
                 );
 
                 var log = new SyncLog
                 {
-                    EventId = receivable.EventId,
-                    EventType = "titulo-criado",
+                    EventId = payment.EventId,
+                    EventType = "titulo-pago",
                     Status = result.Success ? "success" : "error",
-                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(receivable),
+                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
                     ErrorMessage = result.ErrorMessage,
                     Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
                 };
 
                 await syncLogService.SaveSyncLogAsync(log);
 
-                counters.ReceivableCount++;
+                counters.PaymentCount++;
                 if (result.Success)
                 {
                     counters.SuccessCount++;
-                    receivableSuccess++;
+                    paymentSuccess++;
                 }
                 else
                 {
                     counters.ErrorCount++;
-                    receivableErrors++;
+                    paymentErrors++;
                 }
             }
 
-            Log.Information($"[{project.Name}] ✅ Títulos: {receivableSuccess} sucesso, {receivableErrors} erros");
+            Log.Information($"[{project.Name}] ✅ Pagamentos de títulos: {paymentSuccess} sucesso, {paymentErrors} erros");
         }
         catch (Exception ex)
         {
-            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar títulos a receber");
+            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar pagamentos de títulos");
         }
     }
 
