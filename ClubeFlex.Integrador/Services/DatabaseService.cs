@@ -706,25 +706,24 @@ public class DatabaseService
     /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
     /// <param name="existingChecksums">Checksums existentes para comparar e evitar reenvio de dados inalterados</param>
     /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
-    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false)
+    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0)
     {
         var receivables = new List<TituloPayload>();
 
-        var batchSize = limit ?? 100;
+        var batchSize = limit ?? 500;
         
         // Se ignoreFromDate = true, não aplica filtro de data
-        // Isso permite buscar TODAS as dívidas em aberto, inclusive vencidas há muito tempo
         var dateFilter = (fromDate.HasValue && !ignoreFromDate) 
             ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'" 
             : "";
         
-        if (ignoreFromDate)
+        if (ignoreFromDate && offset == 0)
         {
             Log.Information("📋 Buscando TODOS os títulos em aberto (sem filtro de data)");
         }
 
         var query = $@"
-            SELECT FIRST {batchSize}
+            SELECT FIRST {batchSize} SKIP {offset}
                 cr.CODCR as receivable_id,
                 cr.CODMOVENDA as invoice_id,
                 cr.CODCLI as customer_id,
@@ -896,7 +895,7 @@ public class DatabaseService
     /// Busca pagamentos de títulos a receber (CONTARECEBERREC) para sincronização
     /// Usado pelo sistema de cobranças (Financeiro)
     /// </summary>
-    public async Task<List<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false)
+    public async Task<List<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0)
     {
         var payments = new List<TituloPagamentoPayload>();
 
@@ -906,7 +905,7 @@ public class DatabaseService
             : "";
 
         var query = $@"
-            SELECT FIRST {batchSize}
+            SELECT FIRST {batchSize} SKIP {offset}
                 crr.ID as payment_id,
                 cr.CODCR as receivable_id,
                 crr.VALOR as paid_amount,
