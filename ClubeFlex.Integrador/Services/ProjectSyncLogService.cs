@@ -237,45 +237,57 @@ public class ProjectSyncLogService
         
         try
         {
-            // Buscar event_id e checksum (armazenado no campo payload)
-            var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id,payload";
-            
-            var response = await _httpClient.GetAsync(url);
-            
-            if (response.IsSuccessStatusCode)
+            // Paginar para buscar TODOS os checksums (PostgREST limita a 1000 por padrão)
+            const int pageSize = 1000;
+            int offset = 0;
+            bool hasMore = true;
+
+            while (hasMore)
             {
-                var json = await response.Content.ReadAsStringAsync();
-                var logs = JsonSerializer.Deserialize<List<SyncLogWithPayloadResponse>>(json);
+                var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id,payload&limit={pageSize}&offset={offset}&order=event_id.asc";
                 
-                foreach (var log in logs ?? Enumerable.Empty<SyncLogWithPayloadResponse>())
+                var response = await _httpClient.GetAsync(url);
+                
+                if (response.IsSuccessStatusCode)
                 {
-                    if (!string.IsNullOrEmpty(log.EventId) && log.Payload != null)
+                    var json = await response.Content.ReadAsStringAsync();
+                    var logs = JsonSerializer.Deserialize<List<SyncLogWithPayloadResponse>>(json);
+                    var pageCount = logs?.Count ?? 0;
+                    
+                    foreach (var log in logs ?? Enumerable.Empty<SyncLogWithPayloadResponse>())
                     {
-                        // Extrair checksum do payload
-                        try
+                        if (!string.IsNullOrEmpty(log.EventId) && log.Payload != null)
                         {
-                            if (log.Payload.Value.TryGetProperty("checksum", out var checksumElement))
+                            try
                             {
-                                var checksum = checksumElement.GetString();
-                                if (!string.IsNullOrEmpty(checksum))
+                                if (log.Payload.Value.TryGetProperty("checksum", out var checksumElement))
                                 {
-                                    checksums[log.EventId] = checksum;
+                                    var checksum = checksumElement.GetString();
+                                    if (!string.IsNullOrEmpty(checksum))
+                                    {
+                                        checksums[log.EventId] = checksum;
+                                    }
                                 }
                             }
-                        }
-                        catch
-                        {
-                            // Ignorar payloads que não têm checksum
+                            catch
+                            {
+                                // Ignorar payloads que não têm checksum
+                            }
                         }
                     }
+
+                    // Se retornou menos que pageSize, não há mais páginas
+                    hasMore = pageCount >= pageSize;
+                    offset += pageSize;
                 }
+                else
+                {
+                    Log.Warning($"❌ [{_projectName}] Erro ao consultar checksums de {displayName}: {response.StatusCode}");
+                    hasMore = false;
+                }
+            }
                 
-                Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de {displayName}");
-            }
-            else
-            {
-                Log.Warning($"❌ [{_projectName}] Erro ao consultar checksums de {displayName}: {response.StatusCode}");
-            }
+            Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de {displayName}");
         }
         catch (Exception ex)
         {
