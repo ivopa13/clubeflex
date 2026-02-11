@@ -12,6 +12,8 @@ interface TituloPagamentoPayload {
   paid_amount: number
   paid_at: string
   payment_type: string
+  payment_event_id?: string
+  execution_id?: string
 }
 
 Deno.serve(async (req) => {
@@ -29,11 +31,11 @@ Deno.serve(async (req) => {
     console.log('📥 Pagamento de título recebido:', payload.receivable_id_ext)
 
     // Validar campos obrigatórios
-    if (!payload.receivable_id_ext || !payload.paid_amount) {
+    if (!payload.event_id || !payload.receivable_id_ext || !payload.paid_amount) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'receivable_id_ext e paid_amount são obrigatórios',
+          error: 'Missing required fields: event_id, receivable_id_ext, paid_amount',
           validation_error: true
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -96,7 +98,7 @@ Deno.serve(async (req) => {
         paid_amount: payload.paid_amount,
         paid_at: payload.paid_at,
         payment_type: payload.payment_type || 'unknown',
-        payment_event_id: payload.event_id
+        payment_event_id: payload.payment_event_id || payload.event_id
       })
 
     if (paymentError) {
