@@ -227,7 +227,7 @@ public class DatabaseService
                 // Comparar com checksum existente - se igual, pular
                 if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
                 {
-                    if (existingChecksum == payload.Checksum)
+                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
                     {
                         Log.Debug($"⏭️ Fatura {invoiceId} sem alterações (checksum igual)");
                         skippedByChecksum++;
@@ -398,7 +398,7 @@ public class DatabaseService
                 // Comparar com checksum existente - se igual, pular
                 if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
                 {
-                    if (existingChecksum == payload.Checksum)
+                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
                     {
                         Log.Debug($"⏭️ Pagamento {paymentId} sem alterações (checksum igual)");
                         skippedByChecksum++;
@@ -505,7 +505,7 @@ public class DatabaseService
                 // Comparar com checksum existente - se igual, pular
                 if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
                 {
-                    if (existingChecksum == payload.Checksum)
+                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
                     {
                         Log.Debug($"⏭️ Pagamento à vista {eventId} sem alterações (checksum igual)");
                         skippedByChecksum++;
@@ -605,7 +605,7 @@ public class DatabaseService
                 // Comparar com checksum existente - se igual, pular
                 if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
                 {
-                    if (existingChecksum == payload.Checksum)
+                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
                     {
                         Log.Debug($"⏭️ Cheque {eventId} sem alterações (checksum igual)");
                         skippedByChecksum++;
@@ -852,7 +852,7 @@ public class DatabaseService
                 // Comparar com checksum existente - se igual, pular
                 if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
                 {
-                    if (existingChecksum == payload.Checksum)
+                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
                     {
                         Log.Debug($"⏭️ Título {receivableId} sem alterações (checksum igual)");
                         skippedByChecksum++;
@@ -958,7 +958,7 @@ public class DatabaseService
 
                 if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
                 {
-                    if (existingChecksum == payload.Checksum)
+                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
                     {
                         Log.Debug($"⏭️ Pagamento de título {eventId} sem alterações (checksum igual)");
                         skippedByChecksum++;
