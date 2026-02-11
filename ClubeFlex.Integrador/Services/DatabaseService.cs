@@ -950,7 +950,8 @@ public class DatabaseService
                     ReceivableIdExt = receivableId,
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
                     PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
-                    PaymentType = mappedType
+                    PaymentType = mappedType,
+                    PaymentEventId = eventId
                 };
 
                 payload.CalculateChecksum();

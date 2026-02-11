@@ -171,6 +171,13 @@ public class TituloPagamentoPayload
     public string PaymentType { get; set; } = "unknown";
 
     /// <summary>
+    /// ID do evento de pagamento (usado como chave de deduplicação no receivable_payments)
+    /// Geralmente é o mesmo valor do EventId
+    /// </summary>
+    [JsonProperty("payment_event_id")]
+    public string PaymentEventId { get; set; } = string.Empty;
+
+    /// <summary>
     /// ID da execução do integrador (para rastreamento)
     /// </summary>
     [JsonProperty("execution_id")]
