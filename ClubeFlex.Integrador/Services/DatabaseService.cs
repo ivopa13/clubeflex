@@ -691,16 +691,9 @@ public class DatabaseService
 
     /// <summary>
     /// Busca títulos a receber (CONTARECEBER) para o sistema de cobranças
-    /// Inclui apenas títulos em aberto (SITUACAO = 'A')
-    /// </summary>
-    /// <param name="limit">Limite de registros por batch</param>
-    /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
-    /// <param name="syncedEventIds">IDs de eventos já sincronizados</param>
-    /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
-    /// <summary>
-    /// Busca títulos a receber (CONTARECEBER) para o sistema de cobranças
-    /// Inclui apenas títulos em aberto (SITUACAO = 'A')
-    /// Agora calcula checksum para detectar alterações e evitar sincronização desnecessária
+    /// Inclui títulos em aberto E pagos/baixados (para que os pagamentos possam ser vinculados)
+    /// Exclui apenas títulos cancelados
+    /// Calcula checksum para detectar alterações e evitar sincronização desnecessária
     /// </summary>
     /// <param name="limit">Limite de registros por batch</param>
     /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
@@ -719,7 +712,7 @@ public class DatabaseService
         
         if (ignoreFromDate && offset == 0)
         {
-            Log.Information("📋 Buscando TODOS os títulos em aberto (sem filtro de data)");
+            Log.Information("📋 Buscando TODOS os títulos (abertos e pagos, sem filtro de data)");
         }
 
         var query = $@"
@@ -743,8 +736,7 @@ public class DatabaseService
                 cr.FLAGCANCELADA as flag_cancelada
             FROM CONTARECEBER cr
             INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
-            WHERE COALESCE(cr.FLAGPAGO, 'N') = 'N'
-            AND COALESCE(cr.FLAGCANCELADA, 'N') = 'N'
+            WHERE COALESCE(cr.FLAGCANCELADA, 'N') = 'N'
             AND cr.VALOR > 0
             {dateFilter}
             ORDER BY cr.DATVENC ASC, cr.CODCR ASC";
@@ -821,7 +813,7 @@ public class DatabaseService
                     IssuedAt = issuedAt?.ToString("yyyy-MM-dd") ?? dueDate.Value.ToString("yyyy-MM-dd"),
                     InstallmentNumber = installmentNumber,
                     TotalInstallments = totalInstallments,
-                    Status = "A", // Em aberto (filtrado pela query)
+                    Status = (reader["flag_pago"]?.ToString()?.Trim().ToUpper() == "S") ? "P" : "A",
                     DaysOverdue = daysOverdue,
                     IsOverdue = isOverdue,
                     DocumentNumber = reader.IsDBNull(reader.GetOrdinal("document_number")) 
