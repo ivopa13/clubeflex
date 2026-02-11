@@ -265,22 +265,26 @@ public class ProjectSyncLogService
                     
                     foreach (var log in logs ?? Enumerable.Empty<SyncLogWithPayloadResponse>())
                     {
-                        if (!string.IsNullOrEmpty(log.EventId) && log.Payload != null)
+                        if (!string.IsNullOrEmpty(log.EventId))
                         {
                             try
                             {
-                                if (log.Payload.Value.TryGetProperty("checksum", out var checksumElement))
+                                if (log.Payload != null && log.Payload.Value.TryGetProperty("checksum", out var checksumElement))
                                 {
                                     var checksum = checksumElement.GetString();
                                     if (!string.IsNullOrEmpty(checksum))
                                     {
                                         checksums[log.EventId] = checksum;
+                                        continue;
                                     }
                                 }
+                                // Registros antigos sem checksum: marcar como já sincronizado
+                                // Usa sentinela "__no_checksum__" para que o DatabaseService pule
+                                checksums[log.EventId] = "__no_checksum__";
                             }
                             catch
                             {
-                                // Ignorar payloads que não têm checksum
+                                checksums[log.EventId] = "__no_checksum__";
                             }
                         }
                     }
