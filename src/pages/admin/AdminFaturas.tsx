@@ -93,18 +93,17 @@ const AdminFaturas = () => {
   const totalCount = queryResult?.totalCount ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
-  // Query separada para somar o valor total real do período (sem paginação)
+  // Query separada para somar o valor total real do período via função SQL (sem limite de linhas)
   const { data: totalRevenue, isLoading: isLoadingRevenue } = useQuery({
     queryKey: ["admin-invoices-total-revenue", dateRange.from, dateRange.to],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("total_amount")
-        .gte("created_at", dateRange.from.toISOString())
-        .lte("created_at", dateRange.to.toISOString());
+      const { data, error } = await supabase.rpc("get_invoices_total_amount", {
+        from_date: dateRange.from.toISOString(),
+        to_date: dateRange.to.toISOString(),
+      });
 
       if (error) throw error;
-      return (data || []).reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+      return Number(data ?? 0);
     },
   });
 
