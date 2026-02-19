@@ -12,6 +12,7 @@ class Program
         // Use --interactive ou -i se quiser que espere Enter no final
         bool interactiveMode = args.Contains("--interactive") || args.Contains("-i");
         bool updateTypesMode = args.Contains("--update-types");
+        bool fullHistoryMode = args.Contains("--full-history") || args.Contains("--historico");
         
         // PRIMEIRO: Output básico sem depender de nada
         Console.WriteLine("==============================================");
@@ -20,6 +21,7 @@ class Program
         Console.WriteLine("==============================================");
         if (!interactiveMode) Console.WriteLine("       [FECHA AUTOMATICAMENTE]");
         if (updateTypesMode) Console.WriteLine("       [MODO: ATUALIZAÇÃO DE TIPOS]");
+        if (fullHistoryMode) Console.WriteLine("       [MODO: HISTÓRICO COMPLETO - SEM FILTRO DE DATA]");
         Console.WriteLine($"Data/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         Console.WriteLine($"Diretório atual: {Directory.GetCurrentDirectory()}");
         Console.WriteLine($"appsettings.json existe: {File.Exists("appsettings.json")}");
@@ -41,10 +43,21 @@ class Program
 
             // Carregar configurações
             Console.WriteLine("Carregando configurações...");
-            var configuration = new ConfigurationBuilder()
+            var configBuilder = new ConfigurationBuilder()
                 .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                .Build();
+                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+
+            // No modo histórico completo, sobrescreve SyncFromDate para null (sem filtro)
+            if (fullHistoryMode)
+            {
+                Console.WriteLine("⚠️  MODO HISTÓRICO: SyncFromDate será ignorado. Todos os registros serão sincronizados.");
+                configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["SyncSettings:SyncFromDate"] = ""
+                });
+            }
+
+            var configuration = configBuilder.Build();
             Console.WriteLine("Configurações carregadas com sucesso.");
 
             // Validar configurações obrigatórias
@@ -113,9 +126,10 @@ class Program
             }
             else
             {
-                // Executar sincronização normal
-                Log.Information("Iniciando sincronização...");
-                Console.WriteLine("Iniciando sincronização...");
+                // Executar sincronização normal (ou histórica com --full-history)
+                var modeLabel = fullHistoryMode ? "histórica completa (sem filtro de data)" : "normal";
+                Log.Information($"Iniciando sincronização {modeLabel}...");
+                Console.WriteLine($"Iniciando sincronização {modeLabel}...");
                 await syncService.ExecuteSyncAsync();
                 Log.Information("Sincronização concluída com sucesso");
                 Console.WriteLine("Sincronização concluída com sucesso!");
