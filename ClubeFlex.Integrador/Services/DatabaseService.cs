@@ -168,11 +168,24 @@ public class DatabaseService
                     continue;
                 }
 
-                // Tipo de movimento: 064 = serviço, demais (007, 018, etc.) = produto
+                // Normaliza removendo zeros à esquerda (000000007 → 7)
                 var movementTypeCode = reader.IsDBNull(reader.GetOrdinal("movement_type_code"))
                     ? null
-                    : reader["movement_type_code"].ToString()?.Trim();
-                var movementType = movementTypeCode == "064" ? "servico" : "produto";
+                    : reader["movement_type_code"].ToString()?.Trim().TrimStart('0');
+
+                // Apenas códigos 7 (Pré Venda) e 18 (Orçamento) = produto
+                // Código 64 (Venda de Serviços) = servico
+                // Qualquer outro código: ignorar (não é uma venda válida)
+                string movementType;
+                if (movementTypeCode == "7" || movementTypeCode == "18")
+                    movementType = "produto";
+                else if (movementTypeCode == "64")
+                    movementType = "servico";
+                else
+                {
+                    Log.Debug($"⏭️ Fatura {invoiceId} ignorada: tipo de movimento {movementTypeCode} não é venda");
+                    continue;
+                }
 
 
                 var payload = new FaturaCriadaPayload
