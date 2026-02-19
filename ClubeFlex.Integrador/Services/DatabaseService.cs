@@ -93,11 +93,11 @@ public class DatabaseService
     /// Busca novas faturas que ainda não foram sincronizadas com sucesso
     /// Usa checksum para detectar alterações e evitar sincronização desnecessária
     /// </summary>
-    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
+    public async Task<List<FaturaCriadaPayload>> GetNewInvoicesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, int offset = 0)
     {
         var invoices = new List<FaturaCriadaPayload>();
 
-        var batchSize = limit ?? 100;
+        var batchSize = limit ?? 500;
         var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         // IMPORTANTE:
@@ -109,7 +109,7 @@ public class DatabaseService
         // - e a filtragem por checksum (se já sincronizado e inalterado)
 
         var query = $@"
-            SELECT FIRST {batchSize}
+            SELECT FIRST {batchSize} SKIP {offset}
                 m.CODMOVENDA as invoice_id,
                 m.NUMPED as order_number,
                 m.VALORTOTALNOTA as total_amount,
@@ -129,8 +129,9 @@ public class DatabaseService
             LEFT JOIN TRANSPORTADORA t ON m.CODTRANS = t.CODTRANS
             WHERE m.CODCLI <> 3005
             AND m.VALORTOTALNOTA > 0
+            AND TRIM(m.CODTIPOMOVIMENTO) IN ('000000007', '000000018', '000000064', '007', '018', '064', '7', '18', '64')
             {dateFilter}
-            ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
+            ORDER BY m.DATA ASC, m.CODMOVENDA ASC";
 
         int skippedByChecksum = 0;
 
@@ -351,15 +352,15 @@ public class DatabaseService
     /// Inclui o CODREC para identificar o tipo real de pagamento
     /// Usa checksum para detectar alterações
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
+    public async Task<List<PagamentoPayload>> GetNewPaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, int offset = 0)
     {
         var payments = new List<PagamentoPayload>();
 
-        var batchSize = limit ?? 100;
+        var batchSize = limit ?? 500;
         var dateFilter = fromDate.HasValue ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         var query = $@"
-            SELECT FIRST {batchSize}
+            SELECT FIRST {batchSize} SKIP {offset}
                 crr.ID as payment_id,
                 m.CODMOVENDA as invoice_id,
                 crr.VALOR as paid_amount,
@@ -370,7 +371,7 @@ public class DatabaseService
             INNER JOIN MOVENDA m ON cr.CODMOVENDA = m.CODMOVENDA
             WHERE crr.VALOR > 0
             {dateFilter}
-            ORDER BY crr.DATA DESC, crr.ID DESC";
+            ORDER BY crr.DATA ASC, crr.ID ASC";
 
         int skippedByChecksum = 0;
 
@@ -447,11 +448,11 @@ public class DatabaseService
     /// Exclui apenas: Carnê, A Prazo (carteira) e Promissória (serão tratados separadamente)
     /// Usa checksum para detectar alterações
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
+    public async Task<List<PagamentoPayload>> GetCashPaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, int offset = 0)
     {
         var payments = new List<PagamentoPayload>();
 
-        var batchSize = limit ?? 100;
+        var batchSize = limit ?? 500;
         var dateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         // Códigos de recebimento que devem ser EXCLUÍDOS:
@@ -462,7 +463,7 @@ public class DatabaseService
         var excludedCodes = "'002', '008', '009', '033'";
 
         var query = $@"
-            SELECT FIRST {batchSize}
+            SELECT FIRST {batchSize} SKIP {offset}
                 TRIM(m.CODMOVENDA) as invoice_id,
                 mr.VALOR as paid_amount,
                 m.DATA as paid_at,
@@ -475,7 +476,7 @@ public class DatabaseService
             AND m.CODCLI <> 3005
             {dateFilter}
             AND TRIM(r.CODREC) NOT IN ({excludedCodes})
-            ORDER BY m.DATA DESC, m.CODMOVENDA DESC";
+            ORDER BY m.DATA ASC, m.CODMOVENDA ASC";
 
         int skippedByChecksum = 0;
 
@@ -553,15 +554,15 @@ public class DatabaseService
     /// Busca cheques compensados (depositados e não devolvidos)
     /// Usa checksum para detectar alterações
     /// </summary>
-    public async Task<List<PagamentoPayload>> GetClearedChecksAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null)
+    public async Task<List<PagamentoPayload>> GetClearedChecksAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, int offset = 0)
     {
         var checks = new List<PagamentoPayload>();
 
-        var batchSize = limit ?? 100;
+        var batchSize = limit ?? 500;
         var dateFilter = fromDate.HasValue ? $"AND c.DEPOSITO >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         var query = $@"
-            SELECT FIRST {batchSize}
+            SELECT FIRST {batchSize} SKIP {offset}
                 TRIM(c.CODMOVENDA) as invoice_id,
                 c.VALOR as paid_amount,
                 c.DEPOSITO as paid_at,
@@ -575,7 +576,7 @@ public class DatabaseService
                 AND c.VALOR > 0
                 AND m.CODCLI <> 3005
                 {dateFilter}
-            ORDER BY c.DEPOSITO DESC";
+            ORDER BY c.DEPOSITO ASC";
 
         int skippedByChecksum = 0;
 
