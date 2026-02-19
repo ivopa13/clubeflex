@@ -108,137 +108,92 @@ public class SyncService
     /// <summary>
     /// Obtém ou cria serviço de API para um projeto
     /// </summary>
-    private ProjectApiService GetApiService(ProjectConfig project)
+    private ProjectApiService GetOrCreateApiService(ProjectConfig project)
     {
-        if (!_apiServices.ContainsKey(project.Name))
+        if (!_apiServices.TryGetValue(project.Name, out var service))
         {
-            _apiServices[project.Name] = new ProjectApiService(project);
+            service = new ProjectApiService(project.BaseUrl, project.ApiKey);
+            _apiServices[project.Name] = service;
         }
-        return _apiServices[project.Name];
+        return service;
     }
 
     /// <summary>
-    /// Obtém ou cria serviço de logs para um projeto
+    /// Obtém ou cria serviço de log para um projeto
     /// </summary>
-    private ProjectSyncLogService GetSyncLogService(ProjectConfig project)
+    private ProjectSyncLogService GetOrCreateSyncLogService(ProjectConfig project)
     {
-        if (!_syncLogServices.ContainsKey(project.Name))
+        if (!_syncLogServices.TryGetValue(project.Name, out var service))
         {
-            _syncLogServices[project.Name] = new ProjectSyncLogService(project);
+            service = new ProjectSyncLogService(project.BaseUrl, project.ApiKey, project.Name);
+            _syncLogServices[project.Name] = service;
         }
-        return _syncLogServices[project.Name];
+        return service;
     }
 
     /// <summary>
-    /// Executa sincronização completa para todos os projetos configurados
+    /// Executa sincronização para todos os projetos configurados
     /// </summary>
-    public async Task ExecuteSyncAsync()
+    public async Task SyncAllProjectsAsync()
     {
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
         
         if (validProjects.Count == 0)
         {
-            Log.Fatal("Nenhum projeto válido configurado. Verifique o appsettings.json");
+            Log.Error("❌ Nenhum projeto válido configurado. Verifique o appsettings.json");
             return;
         }
 
-        Log.Information($"=== Iniciando Sincronização para {validProjects.Count} projeto(s) ===");
+        Log.Information($"🚀 Iniciando sincronização para {validProjects.Count} projeto(s)");
 
-        // Testar conexão com o banco uma vez
-        var dbOk = await _databaseService.TestConnectionAsync();
-        if (!dbOk)
-        {
-            Log.Fatal("Falha na conexão com o banco de dados. Abortando.");
-            return;
-        }
-
-        // Sincronizar cada projeto
         foreach (var project in validProjects)
         {
-            await SyncProjectAsync(project);
+            await SyncForProjectAsync(project);
         }
 
-        Log.Information("=== Sincronização Finalizada ===");
+        Log.Information("✅ Sincronização de todos os projetos concluída");
     }
 
     /// <summary>
-    /// Sincroniza um projeto específico
+    /// Executa sincronização para um projeto específico
     /// </summary>
-    private async Task SyncProjectAsync(ProjectConfig project)
+    private async Task SyncForProjectAsync(ProjectConfig project)
     {
-        Log.Information($"");
-        Log.Information($"════════════════════════════════════════════════════");
-        Log.Information($"  📦 Projeto: {project.Name}");
-        Log.Information($"  📋 Sincroniza: {project.GetSyncDescription()}");
-        Log.Information($"════════════════════════════════════════════════════");
+        Log.Information($"[{project.Name}] === Iniciando sincronização ===");
 
-        var apiService = GetApiService(project);
-        var syncLogService = GetSyncLogService(project);
-        
-        // Testar conectividade com a API do projeto
-        var apiOk = await apiService.TestConnectionAsync();
-        if (!apiOk)
-        {
-            Log.Error($"[{project.Name}] Falha na conectividade. Pulando este projeto.");
-            return;
-        }
+        var apiService = GetOrCreateApiService(project);
+        var syncLogService = GetOrCreateSyncLogService(project);
 
-        // Iniciar rastreamento de execução
         await syncLogService.StartExecutionAsync();
 
         var counters = new SyncCounters();
 
         try
         {
-            // Sincronizar faturas se habilitado
+            // Sempre sincronizar faturas primeiro (para garantir que pagamentos encontrem os títulos)
             if (project.SyncInvoices)
-            {
                 await SyncInvoicesForProjectAsync(project, apiService, syncLogService, counters);
-            }
 
-            // Sincronizar pagamentos se habilitado
             if (project.SyncPayments)
-            {
                 await SyncPaymentsForProjectAsync(project, apiService, syncLogService, counters);
-            }
 
-            // Sincronizar títulos a receber se habilitado
             if (project.SyncReceivables)
-            {
                 await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters);
-            }
-
-            // Finalizar execução
-            var totalEvents = counters.InvoiceCount + counters.PaymentCount + counters.ReceivableCount;
-            var status = counters.ErrorCount > 0 ? "completed_with_errors" : "completed";
-            
-            await syncLogService.FinishExecutionAsync(
-                status, 
-                totalEvents, 
-                counters.SuccessCount, 
-                counters.ErrorCount, 
-                counters.InvoiceCount, 
-                counters.PaymentCount
-            );
 
             Log.Information($"[{project.Name}] ✅ Concluído: {counters.SuccessCount} sucesso, {counters.ErrorCount} erros");
         }
         catch (Exception ex)
         {
             Log.Error(ex, $"[{project.Name}] Erro durante sincronização");
-            await syncLogService.FinishExecutionAsync(
-                "failed", 
-                counters.InvoiceCount + counters.PaymentCount + counters.ReceivableCount, 
-                counters.SuccessCount, 
-                counters.ErrorCount, 
-                counters.InvoiceCount, 
-                counters.PaymentCount
-            );
+        }
+        finally
+        {
+            await syncLogService.FinishExecutionAsync(counters.InvoiceCount, counters.PaymentCount, counters.SuccessCount, counters.ErrorCount);
         }
     }
 
     /// <summary>
-    /// Sincroniza faturas para um projeto específico com paginação automática
+    /// Sincroniza faturas (invoices) para um projeto.
     /// Usa checksum para detectar alterações e evitar reenvio desnecessário
     /// </summary>
     private async Task SyncInvoicesForProjectAsync(
@@ -248,24 +203,22 @@ public class SyncService
         SyncCounters counters)
     {
         Log.Information($"[{project.Name}] === Sincronizando Faturas ===");
-        
+
         try
         {
             // Buscar checksums existentes para comparação (em vez de apenas event_ids)
             var existingChecksums = await syncLogService.GetInvoiceChecksumsAsync();
             var limit = _testMode ? _testModeLimit : _batchSize;
 
-            // === LOOP DE PAGINAÇÃO: buscar todas as faturas em lotes ===
+            int totalInvoices = 0;
             int totalInvoiceSuccess = 0;
             int totalInvoiceErrors = 0;
-            int totalInvoices = 0;
             int batchNumber = 0;
 
             while (true)
             {
                 batchNumber++;
                 var offset = (batchNumber - 1) * limit;
-
                 Log.Information($"[{project.Name}] 📦 Buscando lote {batchNumber} de faturas (offset {offset}, limit {limit})...");
 
                 var invoices = await _databaseService.GetNewInvoicesAsync(limit, _syncFromDate, existingChecksums, offset);
@@ -275,44 +228,30 @@ public class SyncService
                     if (batchNumber == 1)
                         Log.Information($"[{project.Name}] Nenhuma fatura nova ou alterada para sincronizar");
                     else
-                        Log.Information($"[{project.Name}] ✅ Todos os lotes de faturas processados ({batchNumber - 1} lotes)");
+                        Log.Information($"[{project.Name}] Faturas: todos os lotes processados ({batchNumber - 1} lotes)");
                     break;
                 }
 
                 totalInvoices += invoices.Count;
-                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {invoices.Count} faturas novas/alteradas");
+                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {invoices.Count} faturas");
 
                 foreach (var invoice in invoices)
                 {
                     var result = await SendWithRetryAsync(
                         async () => await apiService.SendInvoiceCreatedAsync(invoice),
                         invoice.EventId,
-                        project.Name
-                    );
+                        project.Name);
 
-                    var log = new SyncLog
-                    {
-                        EventId = invoice.EventId,
-                        EventType = "fatura-criada",
-                        Status = result.Success ? "success" : "error",
-                        Payload = Newtonsoft.Json.JsonConvert.SerializeObject(invoice),
-                        ErrorMessage = result.ErrorMessage,
-                        Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
-                    };
-
-                    await syncLogService.SaveSyncLogAsync(log);
+                    await syncLogService.LogEventAsync(invoice.EventId, "fatura", result.Success, result.ErrorMessage, invoice.Checksum);
 
                     counters.InvoiceCount++;
                     if (result.Success) { counters.SuccessCount++; totalInvoiceSuccess++; }
                     else { counters.ErrorCount++; totalInvoiceErrors++; }
                 }
 
-                Log.Information($"[{project.Name}] ✅ Lote {batchNumber} faturas: {invoices.Count - totalInvoiceErrors} sucesso");
-
-                // Se retornou menos que o limit, não há mais dados
                 if (invoices.Count < limit)
                 {
-                    Log.Information($"[{project.Name}] ✅ Último lote de faturas (retornou {invoices.Count} < {limit})");
+                    Log.Information($"[{project.Name}] Faturas: último lote (retornou {invoices.Count} < {limit})");
                     break;
                 }
 
@@ -329,7 +268,7 @@ public class SyncService
     }
 
     /// <summary>
-    /// Sincroniza pagamentos para um projeto específico com paginação automática
+    /// Sincroniza pagamentos para um projeto.
     /// Usa checksum para detectar alterações e evitar reenvio desnecessário
     /// </summary>
     private async Task SyncPaymentsForProjectAsync(
@@ -339,40 +278,35 @@ public class SyncService
         SyncCounters counters)
     {
         Log.Information($"[{project.Name}] === Sincronizando Pagamentos ===");
-        
+
         try
         {
             var existingChecksums = await syncLogService.GetPaymentChecksumsAsync();
             var limit = _testMode ? _testModeLimit : _batchSize;
 
             // === LOOP DE PAGINAÇÃO para cada tipo de pagamento ===
-            int totalPaymentSuccess = 0;
-            int totalPaymentErrors = 0;
-            int totalPayments = 0;
+            var acc = new PaymentAccumulator();
 
             // Paginar pagamentos a prazo (CONTARECEBERREC)
             await PaginateAndSendPaymentsAsync(
                 "A prazo",
                 async (lim, off) => await _databaseService.GetNewPaymentsAsync(lim, _syncFromDate, existingChecksums, off),
-                limit, project, apiService, syncLogService, counters,
-                ref totalPayments, ref totalPaymentSuccess, ref totalPaymentErrors);
+                limit, project, apiService, syncLogService, counters, acc);
 
             // Paginar pagamentos à vista (MOVENDAREC)
             await PaginateAndSendPaymentsAsync(
                 "À vista",
                 async (lim, off) => await _databaseService.GetCashPaymentsAsync(lim, _syncFromDate, existingChecksums, off),
-                limit, project, apiService, syncLogService, counters,
-                ref totalPayments, ref totalPaymentSuccess, ref totalPaymentErrors);
+                limit, project, apiService, syncLogService, counters, acc);
 
             // Paginar cheques compensados
             await PaginateAndSendPaymentsAsync(
                 "Cheques",
                 async (lim, off) => await _databaseService.GetClearedChecksAsync(lim, _syncFromDate, existingChecksums, off),
-                limit, project, apiService, syncLogService, counters,
-                ref totalPayments, ref totalPaymentSuccess, ref totalPaymentErrors);
+                limit, project, apiService, syncLogService, counters, acc);
 
-            if (totalPayments > 0)
-                Log.Information($"[{project.Name}] 📊 Total pagamentos: {totalPayments} processados, {totalPaymentSuccess} sucesso, {totalPaymentErrors} erros");
+            if (acc.TotalPayments > 0)
+                Log.Information($"[{project.Name}] 📊 Total pagamentos: {acc.TotalPayments} processados, {acc.TotalSuccess} sucesso, {acc.TotalErrors} erros");
             else
                 Log.Information($"[{project.Name}] Nenhum pagamento novo ou alterado para sincronizar");
         }
@@ -380,6 +314,16 @@ public class SyncService
         {
             Log.Error(ex, $"[{project.Name}] Erro ao sincronizar pagamentos");
         }
+    }
+
+    /// <summary>
+    /// Acumulador de contadores de pagamento (substitui ref int em async)
+    /// </summary>
+    private class PaymentAccumulator
+    {
+        public int TotalPayments { get; set; }
+        public int TotalSuccess { get; set; }
+        public int TotalErrors { get; set; }
     }
 
     /// <summary>
@@ -393,9 +337,7 @@ public class SyncService
         ProjectApiService apiService,
         ProjectSyncLogService syncLogService,
         SyncCounters counters,
-        ref int totalPayments,
-        ref int totalSuccess,
-        ref int totalErrors)
+        PaymentAccumulator acc)
     {
         int batchNumber = 0;
 
@@ -403,8 +345,6 @@ public class SyncService
         {
             batchNumber++;
             var offset = (batchNumber - 1) * limit;
-
-            Log.Information($"[{project.Name}] 📦 {paymentTypeName}: lote {batchNumber} (offset {offset})...");
 
             var payments = await fetchFunc(limit, offset);
 
@@ -417,7 +357,7 @@ public class SyncService
                 break;
             }
 
-            totalPayments += payments.Count;
+            acc.TotalPayments += payments.Count;
             Log.Information($"[{project.Name}] 📋 {paymentTypeName} lote {batchNumber}: {payments.Count} pagamentos");
 
             foreach (var payment in payments)
@@ -425,24 +365,13 @@ public class SyncService
                 var result = await SendWithRetryAsync(
                     async () => await apiService.SendPaymentConfirmedAsync(payment),
                     payment.EventId,
-                    project.Name
-                );
+                    project.Name);
 
-                var log = new SyncLog
-                {
-                    EventId = payment.EventId,
-                    EventType = "pagamento-confirmado",
-                    Status = result.Success ? "success" : "error",
-                    Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
-                    ErrorMessage = result.ErrorMessage,
-                    Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
-                };
-
-                await syncLogService.SaveSyncLogAsync(log);
+                await syncLogService.LogEventAsync(payment.EventId, "pagamento", result.Success, result.ErrorMessage, payment.Checksum);
 
                 counters.PaymentCount++;
-                if (result.Success) { counters.SuccessCount++; totalSuccess++; }
-                else { counters.ErrorCount++; totalErrors++; }
+                if (result.Success) { counters.SuccessCount++; acc.TotalSuccess++; }
+                else { counters.ErrorCount++; acc.TotalErrors++; }
             }
 
             if (payments.Count < limit)
@@ -456,70 +385,53 @@ public class SyncService
     }
 
     /// <summary>
-    /// Sincroniza títulos a receber para um projeto específico (Sistema de Cobranças)
-    /// </summary>
-    /// <summary>
-    /// Sincroniza títulos a receber para um projeto específico (Sistema de Cobranças)
+    /// Sincroniza contas a receber (títulos) para um projeto.
     /// Usa checksum para detectar alterações e evitar reenvio desnecessário
     /// </summary>
     private async Task SyncReceivablesForProjectAsync(
         ProjectConfig project, 
-        ProjectApiService apiService, 
+        ProjectApiService apiService,
         ProjectSyncLogService syncLogService,
-        SyncCounters counters)
+        SyncCounters counters,
+        bool ignoreFromDate = false)
     {
         Log.Information($"[{project.Name}] === Sincronizando Títulos a Receber ===");
-        
+
         try
         {
-            // Buscar checksums existentes para comparação
             var existingChecksums = await syncLogService.GetReceivableChecksumsAsync();
             var limit = _testMode ? _testModeLimit : _batchSize;
-            
-            // Usar configuração do projeto para ignorar ou não o filtro de data
-            var ignoreFromDate = project.SyncReceivablesIgnoreDate;
-            
+
+            // Verificar se deve ignorar filtro de data (modo histórico)
+            var syncSettings = ignoreFromDate ? null : _syncFromDate;
             if (ignoreFromDate)
-            {
-                Log.Information($"[{project.Name}] 📅 SyncReceivablesIgnoreDate = true: Buscando TODOS os títulos (abertos, pagos e cancelados)");
-            }
-            
-            // === LOOP DE PAGINAÇÃO: buscar todos os títulos em lotes ===
+                Log.Information($"[{project.Name}] 🔓 Modo histórico: ignorando filtro de data para títulos");
+
+            // === LOOP DE PAGINAÇÃO para títulos ===
+            int totalReceivables = 0;
             int totalReceivableSuccess = 0;
             int totalReceivableErrors = 0;
-            int totalReceivables = 0;
             int batchNumber = 0;
-            
+
             while (true)
             {
                 batchNumber++;
                 var offset = (batchNumber - 1) * limit;
-                
-                Log.Information($"[{project.Name}] 📦 Buscando lote {batchNumber} (offset {offset}, limit {limit})...");
-                
+                Log.Information($"[{project.Name}] 📦 Buscando lote {batchNumber} de títulos (offset {offset}, limit {limit})...");
+
                 var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset);
-                
+
                 if (receivables.Count == 0)
                 {
                     if (batchNumber == 1)
-                    {
                         Log.Information($"[{project.Name}] Nenhum título novo ou alterado para sincronizar");
-                    }
                     else
-                    {
-                        Log.Information($"[{project.Name}] ✅ Todos os lotes processados ({batchNumber - 1} lotes)");
-                    }
+                        Log.Information($"[{project.Name}] Títulos: todos os lotes processados ({batchNumber - 1} lotes)");
                     break;
                 }
-                
+
                 totalReceivables += receivables.Count;
-                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {receivables.Count} títulos novos/alterados");
-                
-                var overdueCount = receivables.Count(r => r.IsOverdue);
-                if (overdueCount > 0)
-                {
-                    Log.Warning($"[{project.Name}] ⚠️ {overdueCount} títulos vencidos neste lote");
-                }
+                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {receivables.Count} títulos");
 
                 foreach (var receivable in receivables)
                 {
@@ -528,108 +440,54 @@ public class SyncService
                     var result = await SendWithRetryAsync(
                         async () => await apiService.SendReceivableAsync(receivable),
                         receivable.EventId,
-                        project.Name
-                    );
+                        project.Name);
 
-                    var log = new SyncLog
-                    {
-                        EventId = receivable.EventId,
-                        EventType = "titulo-criado",
-                        Status = result.Success ? "success" : "error",
-                        Payload = Newtonsoft.Json.JsonConvert.SerializeObject(receivable),
-                        ErrorMessage = result.ErrorMessage,
-                        Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
-                    };
+                    await syncLogService.LogEventAsync(receivable.EventId, "titulo", result.Success, result.ErrorMessage, receivable.Checksum);
 
-                    await syncLogService.SaveSyncLogAsync(log);
-
-                    counters.ReceivableCount++;
-                    if (result.Success)
-                    {
-                        counters.SuccessCount++;
-                        totalReceivableSuccess++;
-                    }
-                    else
-                    {
-                        counters.ErrorCount++;
-                        totalReceivableErrors++;
-                    }
+                    counters.InvoiceCount++;
+                    if (result.Success) { counters.SuccessCount++; totalReceivableSuccess++; }
+                    else { counters.ErrorCount++; totalReceivableErrors++; }
                 }
 
-                Log.Information($"[{project.Name}] ✅ Lote {batchNumber}: {receivables.Count - totalReceivableErrors} sucesso");
-                
-                // Se retornou menos que o limit, não há mais dados
                 if (receivables.Count < limit)
                 {
-                    Log.Information($"[{project.Name}] ✅ Último lote processado (retornou {receivables.Count} < {limit})");
+                    Log.Information($"[{project.Name}] Títulos: último lote (retornou {receivables.Count} < {limit})");
                     break;
                 }
-                
-                // Em modo teste, não continuar
+
                 if (_testMode) break;
             }
-            
+
             if (totalReceivables > 0)
-            {
                 Log.Information($"[{project.Name}] 📊 Total títulos: {totalReceivables} processados, {totalReceivableSuccess} sucesso, {totalReceivableErrors} erros");
-            }
-
-            // === Sincronizar pagamentos de títulos (titulo-pago) ===
-            await SyncReceivablePaymentsForProjectAsync(project, apiService, syncLogService, counters, ignoreFromDate);
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar títulos a receber");
-        }
-    }
-
-    /// <summary>
-    /// Sincroniza pagamentos de títulos a receber para um projeto específico (titulo-pago)
-    /// </summary>
-    private async Task SyncReceivablePaymentsForProjectAsync(
-        ProjectConfig project,
-        ProjectApiService apiService,
-        ProjectSyncLogService syncLogService,
-        SyncCounters counters,
-        bool ignoreFromDate)
-    {
-        Log.Information($"[{project.Name}] === Sincronizando Pagamentos de Títulos ===");
-
-        try
-        {
-            var existingChecksums = await syncLogService.GetReceivablePaymentChecksumsAsync();
-            var limit = _testMode ? _testModeLimit : _batchSize;
 
             // === LOOP DE PAGINAÇÃO para pagamentos de títulos ===
             int totalPaymentSuccess = 0;
             int totalPaymentErrors = 0;
             int totalPayments = 0;
-            int batchNumber = 0;
-            
+            int paymentBatchNumber = 0;
+
+            var existingPaymentChecksums = await syncLogService.GetReceivablePaymentChecksumsAsync();
+
             while (true)
             {
-                batchNumber++;
-                var offset = (batchNumber - 1) * limit;
-                
-                Log.Information($"[{project.Name}] 📦 Buscando lote {batchNumber} de pagamentos (offset {offset}, limit {limit})...");
-                
-                var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset);
+                paymentBatchNumber++;
+                var offset = (paymentBatchNumber - 1) * limit;
+                Log.Information($"[{project.Name}] 📦 Buscando lote {paymentBatchNumber} de pagamentos de títulos (offset {offset})...");
+
+                var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPaymentChecksums, ignoreFromDate, offset);
 
                 if (payments.Count == 0)
                 {
-                    if (batchNumber == 1)
-                    {
-                        Log.Information($"[{project.Name}] Nenhum pagamento de título novo ou alterado para sincronizar");
-                    }
+                    if (paymentBatchNumber == 1)
+                        Log.Information($"[{project.Name}] Nenhum pagamento de título novo para sincronizar");
                     else
-                    {
-                        Log.Information($"[{project.Name}] ✅ Todos os lotes de pagamentos processados ({batchNumber - 1} lotes)");
-                    }
+                        Log.Information($"[{project.Name}] Pagamentos de títulos: todos os lotes processados ({paymentBatchNumber - 1} lotes)");
                     break;
                 }
 
                 totalPayments += payments.Count;
-                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {payments.Count} pagamentos de títulos novos/alterados");
+                Log.Information($"[{project.Name}] 📋 Lote {paymentBatchNumber}: {payments.Count} pagamentos de títulos novos/alterados");
 
                 foreach (var payment in payments)
                 {
@@ -638,20 +496,9 @@ public class SyncService
                     var result = await SendWithRetryAsync(
                         async () => await apiService.SendReceivablePaymentAsync(payment),
                         payment.EventId,
-                        project.Name
-                    );
+                        project.Name);
 
-                    var log = new SyncLog
-                    {
-                        EventId = payment.EventId,
-                        EventType = "titulo-pago",
-                        Status = result.Success ? "success" : "error",
-                        Payload = Newtonsoft.Json.JsonConvert.SerializeObject(payment),
-                        ErrorMessage = result.ErrorMessage,
-                        Attempts = result.Success ? 1 : (result.IsValidationError ? 1 : _maxRetries)
-                    };
-
-                    await syncLogService.SaveSyncLogAsync(log);
+                    await syncLogService.LogEventAsync(payment.EventId, "pagamento_titulo", result.Success, result.ErrorMessage, payment.Checksum);
 
                     counters.PaymentCount++;
                     if (result.Success)
@@ -666,17 +513,15 @@ public class SyncService
                     }
                 }
 
-                Log.Information($"[{project.Name}] ✅ Lote {batchNumber} pagamentos: {payments.Count} processados");
-                
                 if (payments.Count < limit)
                 {
-                    Log.Information($"[{project.Name}] ✅ Último lote de pagamentos (retornou {payments.Count} < {limit})");
+                    Log.Information($"[{project.Name}] Pagamentos de títulos: último lote (retornou {payments.Count} < {limit})");
                     break;
                 }
-                
+
                 if (_testMode) break;
             }
-            
+
             if (totalPayments > 0)
             {
                 Log.Information($"[{project.Name}] 📊 Total pagamentos de títulos: {totalPayments} processados, {totalPaymentSuccess} sucesso, {totalPaymentErrors} erros");
@@ -689,60 +534,8 @@ public class SyncService
     }
 
     /// <summary>
-    /// Atualiza tipos de movimento das faturas existentes (para o primeiro projeto com SyncInvoices)
-    /// </summary>
-    public async Task UpdateInvoiceTypesAsync()
-    {
-        Log.Information("=== Atualizando Tipos de Movimento das Faturas ===");
-
-        var projectWithInvoices = _projects.FirstOrDefault(p => p.IsValid() && p.SyncInvoices);
-        if (projectWithInvoices == null)
-        {
-            Log.Error("Nenhum projeto configurado para sincronizar faturas");
-            return;
-        }
-
-        try
-        {
-            var dbOk = await _databaseService.TestConnectionAsync();
-            var apiService = GetApiService(projectWithInvoices);
-            var apiOk = await apiService.TestConnectionAsync();
-
-            if (!dbOk || !apiOk)
-            {
-                Log.Fatal("Falha nos testes de conectividade. Abortando.");
-                return;
-            }
-
-            var invoiceTypes = await _databaseService.GetAllInvoiceTypesAsync();
-
-            if (invoiceTypes.Count == 0)
-            {
-                Log.Information("Nenhuma fatura encontrada para atualizar");
-                return;
-            }
-
-            Log.Information($"Encontradas {invoiceTypes.Count} faturas para classificar");
-
-            var result = await apiService.UpdateInvoiceTypesAsync(invoiceTypes);
-
-            if (result.Success)
-            {
-                Log.Information($"✅ Atualização concluída: {result.Message}");
-            }
-            else
-            {
-                Log.Error($"❌ Erro na atualização: {result.ErrorMessage}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "Erro ao atualizar tipos de movimento");
-        }
-    }
-
-    /// <summary>
-    /// Envia com retry automático em caso de falha
+    /// Envia com retry automático em caso de falha.
+    /// Erros 4xx (Bad Request, Not Found) não são retentados — são erros permanentes.
     /// </summary>
     private async Task<ApiResponse> SendWithRetryAsync(Func<Task<ApiResponse>> sendAction, string eventId, string projectName)
     {
@@ -755,41 +548,41 @@ public class SyncService
                 if (result.Success)
                     return result;
 
+                // Erros de validação (4xx) são permanentes — não retentar
                 if (result.IsValidationError)
                 {
-                    Log.Warning($"[{projectName}] ❌ Erro de validação para {eventId}. Não será retentado.");
+                    Log.Warning($"[{projectName}] ⚠️ Erro permanente (4xx) para {eventId}: {result.ErrorMessage}. Não será retentado.");
                     return result;
                 }
 
                 if (attempt < _maxRetries)
                 {
-                    Log.Warning($"[{projectName}] Tentativa {attempt}/{_maxRetries} falhou para {eventId}. Aguardando {_retryDelaySeconds}s...");
-                    await Task.Delay(_retryDelaySeconds * 1000);
+                    Log.Warning($"[{projectName}] Tentativa {attempt}/{_maxRetries} falhou para {eventId}: {result.ErrorMessage}. Aguardando {_retryDelaySeconds}s...");
+                    await Task.Delay(TimeSpan.FromSeconds(_retryDelaySeconds));
+                }
+                else
+                {
+                    Log.Error($"[{projectName}] ❌ Falha após {_maxRetries} tentativas para {eventId}: {result.ErrorMessage}");
+                    result.ErrorMessage = $"Falha após todas as tentativas: {result.ErrorMessage}";
+                    return result;
                 }
             }
             catch (Exception ex)
             {
-                Log.Error(ex, $"[{projectName}] Erro na tentativa {attempt} para {eventId}");
-                
-                if (attempt >= _maxRetries)
+                if (attempt < _maxRetries)
                 {
-                    return new ApiResponse 
-                    { 
-                        Success = false, 
-                        ErrorMessage = ex.Message 
-                    };
+                    Log.Warning(ex, $"[{projectName}] Exceção na tentativa {attempt}/{_maxRetries} para {eventId}. Aguardando {_retryDelaySeconds}s...");
+                    await Task.Delay(TimeSpan.FromSeconds(_retryDelaySeconds));
                 }
-                
-                await Task.Delay(_retryDelaySeconds * 1000);
+                else
+                {
+                    Log.Error(ex, $"[{projectName}] ❌ Exceção após {_maxRetries} tentativas para {eventId}");
+                    return new ApiResponse { Success = false, ErrorMessage = $"Falha após todas as tentativas" };
+                }
             }
         }
 
-        Log.Error($"[{projectName}] Todas as {_maxRetries} tentativas falharam para {eventId}");
-        return new ApiResponse 
-        { 
-            Success = false, 
-            ErrorMessage = "Falha após todas as tentativas" 
-        };
+        return new ApiResponse { Success = false, ErrorMessage = "Falha após todas as tentativas" };
     }
 
     /// <summary>
@@ -799,7 +592,6 @@ public class SyncService
     {
         public int InvoiceCount { get; set; }
         public int PaymentCount { get; set; }
-        public int ReceivableCount { get; set; }
         public int SuccessCount { get; set; }
         public int ErrorCount { get; set; }
     }
