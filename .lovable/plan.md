@@ -1,47 +1,61 @@
 
-## Plano: Aumentar BatchSize para 500 no appsettings.json
+## Correção do Mapeamento de CODTIPOMOVIMENTO no Integrador
 
-### Objetivo
-Aumentar o `BatchSize` de 100 para 500 para recuperar e sincronizar mais registros por execução, acelerando a sincronização inicial dos títulos em aberto.
+### Problema Identificado
 
-### Mudança a Fazer
+O campo `CODTIPOMOVIMENTO` na tabela `MOVENDA` do Firebird é armazenado com zeros à esquerda (formato `000000007`, `000000018`, `000000073`). O código atual compara com `"064"` sem zeros — essa comparação **nunca** retorna verdadeiro.
 
-**Arquivo:** `ClubeFlex.Integrador/appsettings.json`
+Além disso, a lógica atual aceita qualquer movimento que não seja "064" como produto, incluindo movimentos que **não são vendas** (devoluções, transferências, compras de mercadoria, etc.), o que polui os dados de faturamento.
 
-**Local:** Linha 25 na seção `SyncSettings`
+### Regra de Negócio Definida
 
-**Alteração:**
-```json
-"BatchSize": 100  // ANTES
-↓
-"BatchSize": 500  // DEPOIS
+Conforme as tabelas enviadas:
+
+| CODIGO | NOMETIPOMOVIMENTO | Classificação |
+|--------|-------------------|---------------|
+| 007    | PRE VENDA         | produto       |
+| 018    | ORÇAMENTO         | produto       |
+| 064    | VENDA DE SERVIÇOS | servico       |
+| qualquer outro | — | **ignorar** (não sincronizar) |
+
+### Mudanças no `DatabaseService.cs`
+
+**Linha 171–175** — Substituir a lógica atual por:
+
+```csharp
+// Normaliza removendo zeros à esquerda (000000007 → 7)
+var movementTypeCode = reader.IsDBNull(reader.GetOrdinal("movement_type_code"))
+    ? null
+    : reader["movement_type_code"].ToString()?.Trim().TrimStart('0');
+
+// Apenas códigos 7 (Pré Venda) e 18 (Orçamento) = produto
+// Código 64 (Venda de Serviços) = servico
+// Qualquer outro código: ignorar (não é uma venda válida)
+string movementType;
+if (movementTypeCode == "7" || movementTypeCode == "18")
+    movementType = "produto";
+else if (movementTypeCode == "64")
+    movementType = "servico";
+else
+{
+    Log.Debug($"⏭️ Fatura {invoiceId} ignorada: tipo de movimento {movementTypeCode} não é venda");
+    continue;
+}
 ```
 
-### Impacto
+### Impacto nos Dados Históricos
 
-| Aspecto | Antes | Depois | Benefício |
-|---------|-------|--------|-----------|
-| Registros por execução | 100 | 500 | 5x mais dados |
-| Tempo de sincronização inicial | ~10 execuções (1000 títulos) | ~2 execuções | Muito mais rápido |
-| Memória do integrador | Menor | Um pouco maior | Aceitável |
-| Pressão na API | Menor | Maior (500 requests sequenciais) | Controlada pelo integrador |
+Faturas já sincronizadas no banco de dados estão classificadas incorretamente:
+- Faturas com código `007` e `018` → provavelmente já estão como `produto` (OK)
+- Faturas com código `064` → estão como `produto` (ERRADO — deveriam ser `servico`)
+- Faturas com outros códigos (devoluções, transferências etc.) → já estão no banco como `produto` (ERRADO — não deveriam estar)
 
-### Como Funciona
+Para os dados históricos, será necessário rodar a edge function `update-invoice-types` que já existe no projeto, ou executar uma query SQL no banco para reclassificar os registros baseando-se no `invoice_id_ext` mapeado.
 
-1. **Primeira execução**: O integrador busca até 500 títulos do ERP em uma única query
-2. **Processamento**: Itera por cada um, calcula checksum, e envia para Supabase
-3. **Segunda execução**: Se houver mais de 500 títulos, busca os próximos 500
-4. **Com checksum**: Apenas novos ou alterados são enviados (otimização já implementada)
+### Arquivos a Modificar
 
-### Considerações
+- **`ClubeFlex.Integrador/Services/DatabaseService.cs`** — linhas 171–175: substituir lógica de classificação pelo novo mapeamento com `TrimStart('0')` e filtro explícito dos três códigos válidos.
 
-- **Rate limiting**: A Edge Function do Supabase suporta bem esse volume. Os 500 requests ainda são sequenciais (um por um), então não haverá pico de requisições simultâneas.
-- **Segurança**: Aumentar BatchSize não afeta segurança ou RLS.
-- **Flexibilidade**: Pode ser ajustado novamente se necessário (1000, 250, etc.).
+### Observação Técnica
 
-### Próximos Passos
-
-1. Fazer a alteração no appsettings.json
-2. Recompilar o integrador
-3. Executar a sincronização e monitorar os logs para ver a diferença no tempo de processamento
-4. Se houver timeout, pode reduzir para 250 ou 300
+O filtro na query SQL (`WHERE m.VALORTOTALNOTA > 0`) já elimina parte dos movimentos indesejados, mas não todos — devoluções e outros movimentos com valor positivo passariam sem o filtro por tipo. Com a mudança, o `continue` no loop C# garante que apenas faturas com código 007, 018 ou 064 sejam enviadas ao ClubeFlex.
