@@ -93,6 +93,21 @@ const AdminFaturas = () => {
   const totalCount = queryResult?.totalCount ?? 0;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
+  // Query separada para somar o valor total real do período (sem paginação)
+  const { data: totalRevenue, isLoading: isLoadingRevenue } = useQuery({
+    queryKey: ["admin-invoices-total-revenue", dateRange.from, dateRange.to],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("total_amount")
+        .gte("created_at", dateRange.from.toISOString())
+        .lte("created_at", dateRange.to.toISOString());
+
+      if (error) throw error;
+      return (data || []).reduce((sum, inv) => sum + Number(inv.total_amount), 0);
+    },
+  });
+
   const filteredInvoices = useMemo(() => {
     if (!invoices || !searchTerm.trim()) return invoices;
     
@@ -104,13 +119,6 @@ const AdminFaturas = () => {
       invoice.specifier?.name?.toLowerCase().includes(term)
     );
   }, [invoices, searchTerm]);
-
-  // Metrics: Valor Total e Ticket Médio calculados na página atual; contagem total vem do servidor
-  const pageMetrics = useMemo(() => {
-    const data = invoices || [];
-    const pageRevenue = data.reduce((sum, inv: any) => sum + Number(inv.total_amount), 0);
-    return { pageRevenue };
-  }, [invoices]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -228,15 +236,15 @@ const AdminFaturas = () => {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total (pág. atual)</CardTitle>
+            <CardTitle className="text-sm font-medium">Valor Total do Período</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {isLoadingRevenue ? (
               <Skeleton className="h-8 w-32" />
             ) : (
               <div className="text-2xl font-bold text-primary">
-                {formatCurrency(pageMetrics.pageRevenue)}
+                {formatCurrency(totalRevenue ?? 0)}
               </div>
             )}
           </CardContent>
