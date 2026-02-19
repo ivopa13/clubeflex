@@ -140,7 +140,7 @@ public class SyncService
                 await SyncPaymentsForProjectAsync(project, apiService, syncLogService, counters);
 
             if (project.SyncReceivables)
-                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters);
+                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate);
 
             Log.Information($"[{project.Name}] ✅ Concluído: {counters.SuccessCount} sucesso, {counters.ErrorCount} erros");
         }
