@@ -712,7 +712,7 @@ public class DatabaseService
         
         if (ignoreFromDate && offset == 0)
         {
-            Log.Information("📋 Buscando TODOS os títulos (abertos e pagos, sem filtro de data)");
+            Log.Information("📋 Buscando TODOS os títulos (abertos, pagos e cancelados, sem filtro de data)");
         }
 
         var query = $@"
@@ -736,8 +736,7 @@ public class DatabaseService
                 cr.FLAGCANCELADA as flag_cancelada
             FROM CONTARECEBER cr
             INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
-            WHERE COALESCE(cr.FLAGCANCELADA, 'N') = 'N'
-            AND cr.VALOR > 0
+            WHERE cr.VALOR > 0
             {dateFilter}
             ORDER BY cr.DATVENC ASC, cr.CODCR ASC";
 
@@ -813,7 +812,8 @@ public class DatabaseService
                     IssuedAt = issuedAt?.ToString("yyyy-MM-dd") ?? dueDate.Value.ToString("yyyy-MM-dd"),
                     InstallmentNumber = installmentNumber,
                     TotalInstallments = totalInstallments,
-                    Status = (reader["flag_pago"]?.ToString()?.Trim().ToUpper() == "S") ? "P" : "A",
+                    Status = (reader["flag_cancelada"]?.ToString()?.Trim().ToUpper() == "S") ? "C"
+                           : (reader["flag_pago"]?.ToString()?.Trim().ToUpper() == "S") ? "P" : "A",
                     DaysOverdue = daysOverdue,
                     IsOverdue = isOverdue,
                     DocumentNumber = reader.IsDBNull(reader.GetOrdinal("document_number")) 

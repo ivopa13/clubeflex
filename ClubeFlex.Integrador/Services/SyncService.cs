@@ -406,7 +406,7 @@ public class SyncService
             
             if (ignoreFromDate)
             {
-                Log.Information($"[{project.Name}] 📅 SyncReceivablesIgnoreDate = true: Buscando TODOS os títulos (abertos e pagos)");
+                Log.Information($"[{project.Name}] 📅 SyncReceivablesIgnoreDate = true: Buscando TODOS os títulos (abertos, pagos e cancelados)");
             }
             
             // === LOOP DE PAGINAÇÃO: buscar todos os títulos em lotes ===
