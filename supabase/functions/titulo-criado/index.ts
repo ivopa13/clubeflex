@@ -59,10 +59,19 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Determinar o doc do cliente (prioridade: doc > cpf > cnpj)
-    const customerDoc = payload.customer.doc || payload.customer.cpf || payload.customer.cnpj
+    // Normaliza doc: remove não-dígitos e trata como nulo se resultado tiver menos de 11 dígitos
+    const normalizeDoc = (raw?: string) => {
+      if (!raw) return null
+      const digits = raw.replace(/\D/g, '')
+      return digits.length >= 11 ? digits : null
+    }
 
-    // Se não tiver doc, registrar erro de validação e retornar
+    // Determinar o doc do cliente (prioridade: doc > cpf > cnpj)
+    const customerDoc = normalizeDoc(payload.customer.doc)
+      ?? normalizeDoc(payload.customer.cpf)
+      ?? normalizeDoc(payload.customer.cnpj)
+
+    // Se não tiver doc válido (CPF ≥ 11 dígitos ou CNPJ ≥ 14 dígitos), registrar erro
     if (!customerDoc) {
       console.warn(`⚠️ Cliente ${payload.customer.id_ext} (${payload.customer.name}) não possui CPF/CNPJ`)
       
@@ -87,8 +96,8 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Limpar doc (remover caracteres especiais)
-    const cleanDoc = customerDoc.replace(/\D/g, '')
+    // customerDoc já vem normalizado (só dígitos, mínimo 11) pela função normalizeDoc
+    const cleanDoc = customerDoc
 
     // Upsert do cliente
     const { data: customer, error: customerError } = await supabaseAdmin

@@ -777,14 +777,20 @@ public class DatabaseService
                 var daysOverdue = dueDate.Value < today ? (today - dueDate.Value).Days : 0;
                 var isOverdue = daysOverdue > 0;
 
-                // CPF/CNPJ do cliente
-                var customerCpf = reader.IsDBNull(reader.GetOrdinal("customer_cpf")) 
+                // CPF/CNPJ do cliente — normalizar: string vazia ou só zeros = null
+                var customerCpfRaw = reader.IsDBNull(reader.GetOrdinal("customer_cpf")) 
                     ? null 
                     : reader["customer_cpf"].ToString()?.Trim();
+                var customerCpf = string.IsNullOrWhiteSpace(customerCpfRaw) || customerCpfRaw.All(c => c == '0' || c == '.' || c == '-')
+                    ? null
+                    : customerCpfRaw;
                 
-                var customerCnpj = reader.IsDBNull(reader.GetOrdinal("customer_cnpj")) 
+                var customerCnpjRaw = reader.IsDBNull(reader.GetOrdinal("customer_cnpj")) 
                     ? null 
                     : reader["customer_cnpj"].ToString()?.Trim();
+                var customerCnpj = string.IsNullOrWhiteSpace(customerCnpjRaw) || customerCnpjRaw.All(c => c == '0' || c == '.' || c == '-' || c == '/')
+                    ? null
+                    : customerCnpjRaw;
 
                 // Parcela (não temos TOTALPARCELAS, usar 1 como default)
                 var installmentNumber = 1;
