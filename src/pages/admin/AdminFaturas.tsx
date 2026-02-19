@@ -21,6 +21,8 @@ type DateRange = {
 
 type PresetFilter = "this_month" | "last_month" | "this_year" | "custom";
 
+const PAGE_SIZE = 100;
+
 const AdminFaturas = () => {
   const today = new Date();
   const [ascending, setAscending] = useState(false);
@@ -31,9 +33,11 @@ const AdminFaturas = () => {
     to: endOfMonth(today),
   });
   const [tempDateRange, setTempDateRange] = useState<DateRange>(dateRange);
+  const [page, setPage] = useState(0);
 
   const handlePresetChange = (preset: PresetFilter) => {
     setPresetFilter(preset);
+    setPage(0);
     
     let newRange: DateRange;
     
@@ -59,26 +63,35 @@ const AdminFaturas = () => {
   const handleCustomDateApply = () => {
     setDateRange(tempDateRange);
     setPresetFilter("custom");
+    setPage(0);
   };
 
-  const { data: invoices, isLoading } = useQuery({
-    queryKey: ["admin-invoices", ascending, dateRange.from, dateRange.to],
+  const { data: queryResult, isLoading } = useQuery({
+    queryKey: ["admin-invoices", ascending, dateRange.from, dateRange.to, page],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const { data, error, count } = await supabase
         .from("invoices")
         .select(`
           *,
           customer:customers(name),
           specifier:specifiers(name)
-        `)
+        `, { count: "exact" })
         .gte("created_at", dateRange.from.toISOString())
         .lte("created_at", dateRange.to.toISOString())
-        .order("invoice_id_ext", { ascending });
+        .order("invoice_id_ext", { ascending })
+        .range(from, to);
 
       if (error) throw error;
-      return data;
+      return { data, totalCount: count ?? 0 };
     },
   });
+
+  const invoices = queryResult?.data;
+  const totalCount = queryResult?.totalCount ?? 0;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const filteredInvoices = useMemo(() => {
     if (!invoices || !searchTerm.trim()) return invoices;
@@ -92,12 +105,11 @@ const AdminFaturas = () => {
     );
   }, [invoices, searchTerm]);
 
-  const metrics = useMemo(() => {
+  // Metrics: Valor Total e Ticket Médio calculados na página atual; contagem total vem do servidor
+  const pageMetrics = useMemo(() => {
     const data = invoices || [];
-    const totalRevenue = data.reduce((sum, inv: any) => sum + Number(inv.total_amount), 0);
-    const ticketCount = data.length;
-    const avgTicket = ticketCount > 0 ? totalRevenue / ticketCount : 0;
-    return { totalRevenue, ticketCount, avgTicket };
+    const pageRevenue = data.reduce((sum, inv: any) => sum + Number(inv.total_amount), 0);
+    return { pageRevenue };
   }, [invoices]);
 
   const formatCurrency = (value: number) => {
@@ -216,7 +228,7 @@ const AdminFaturas = () => {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Valor Total</CardTitle>
+            <CardTitle className="text-sm font-medium">Valor Total (pág. atual)</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -224,7 +236,7 @@ const AdminFaturas = () => {
               <Skeleton className="h-8 w-32" />
             ) : (
               <div className="text-2xl font-bold text-primary">
-                {formatCurrency(metrics.totalRevenue)}
+                {formatCurrency(pageMetrics.pageRevenue)}
               </div>
             )}
           </CardContent>
@@ -232,28 +244,28 @@ const AdminFaturas = () => {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Número de Faturas</CardTitle>
+            <CardTitle className="text-sm font-medium">Total de Faturas</CardTitle>
             <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <Skeleton className="h-8 w-20" />
             ) : (
-              <div className="text-2xl font-bold">{metrics.ticketCount}</div>
+              <div className="text-2xl font-bold">{totalCount.toLocaleString("pt-BR")}</div>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+            <CardTitle className="text-sm font-medium">Páginas</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <Skeleton className="h-8 w-28" />
             ) : (
-              <div className="text-2xl font-bold">{formatCurrency(metrics.avgTicket)}</div>
+              <div className="text-2xl font-bold">{page + 1} / {totalPages || 1}</div>
             )}
           </CardContent>
         </Card>
@@ -284,7 +296,7 @@ const AdminFaturas = () => {
         <CardHeader>
           <CardTitle>Faturas do Período</CardTitle>
           <CardDescription>
-            {filteredInvoices?.length || 0} faturas encontradas
+            {totalCount.toLocaleString("pt-BR")} faturas no total — página {page + 1} de {totalPages || 1} ({filteredInvoices?.length || 0} exibidas)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -339,6 +351,30 @@ const AdminFaturas = () => {
                   })}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0 || isLoading}
+              >
+                ← Anterior
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Página {page + 1} de {totalPages} ({totalCount.toLocaleString("pt-BR")} faturas)
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1 || isLoading}
+              >
+                Próxima →
+              </Button>
             </div>
           )}
         </CardContent>
