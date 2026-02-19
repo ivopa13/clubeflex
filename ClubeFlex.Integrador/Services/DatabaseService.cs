@@ -116,6 +116,7 @@ public class DatabaseService
                 m.DATA as issued_at,
                 m.CODCLI as customer_id,
                 m.CODTRANS as specifier_id,
+                m.CODTIPOMOVIMENTO as movement_type_code,
                 c.NOMECLI as customer_name,
                 c.CPF as customer_cpf,
                 c.CNPJ as customer_cnpj,
@@ -167,10 +168,11 @@ public class DatabaseService
                     continue;
                 }
 
-                // Tipo de movimento (produto/servico)
-                // Em alguns bancos CPlus o campo de tipo de movimento varia.
-                // Para garantir que as faturas sejam sincronizadas, usamos um default seguro.
-                var movementType = "produto";
+                // Tipo de movimento: 064 = serviço, demais (007, 018, etc.) = produto
+                var movementTypeCode = reader.IsDBNull(reader.GetOrdinal("movement_type_code"))
+                    ? null
+                    : reader["movement_type_code"].ToString()?.Trim();
+                var movementType = movementTypeCode == "064" ? "servico" : "produto";
 
 
                 var payload = new FaturaCriadaPayload
