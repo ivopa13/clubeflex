@@ -697,6 +697,14 @@ export type Database = {
         Args: { from_date: string; to_date: string }
         Returns: number
       }
+      get_sales_by_payment_type: {
+        Args: { from_date: string; to_date: string }
+        Returns: Json
+      }
+      get_sales_metrics: {
+        Args: { from_date: string; to_date: string }
+        Returns: Json
+      }
       get_specifier_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {

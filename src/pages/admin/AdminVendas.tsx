@@ -88,83 +88,58 @@ const AdminVendas = () => {
     setPresetFilter("custom");
   };
 
-  // Fetch invoices with their payments (for payment type breakdown)
-  const { data: invoicesData, isLoading } = useQuery({
-    queryKey: ["sales-invoices", dateRange.from, dateRange.to],
+  // Métricas gerais calculadas no banco (sem limite de 1000 linhas)
+  const { data: metricsData, isLoading: isLoadingMetrics } = useQuery({
+    queryKey: ["sales-metrics", dateRange.from, dateRange.to],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select(`
-          id, 
-          total_amount, 
-          status, 
-          created_at,
-          movement_type,
-          payments (
-            id,
-            payment_type,
-            paid_amount
-          )
-        `)
-        .gte("created_at", dateRange.from.toISOString())
-        .lte("created_at", dateRange.to.toISOString());
-      
+      const { data, error } = await supabase.rpc("get_sales_metrics", {
+        from_date: dateRange.from.toISOString(),
+        to_date: dateRange.to.toISOString(),
+      });
       if (error) throw error;
-      return data;
+      return data as {
+        total_revenue: number;
+        ticket_count: number;
+        avg_ticket: number;
+        product_revenue: number;
+        product_count: number;
+        service_revenue: number;
+        service_count: number;
+      };
     },
   });
 
-  // Calculate metrics based on INVOICES (sales), not payments received
+  // Breakdown por tipo de pagamento calculado no banco
+  const { data: salesByTypeRaw, isLoading: isLoadingByType } = useQuery({
+    queryKey: ["sales-by-payment-type", dateRange.from, dateRange.to],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_sales_by_payment_type", {
+        from_date: dateRange.from.toISOString(),
+        to_date: dateRange.to.toISOString(),
+      });
+      if (error) throw error;
+      return (data || {}) as Record<string, { count: number; total: number }>;
+    },
+  });
+
+  const isLoading = isLoadingMetrics || isLoadingByType;
+
   const metrics = useMemo(() => {
-    const invoices = invoicesData || [];
-
-    // Faturamento Total = soma do total_amount das faturas (vendas)
-    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-    const ticketCount = invoices.length;
-    const avgTicket = ticketCount > 0 ? totalRevenue / ticketCount : 0;
-
-    // Separar por tipo de movimento (produto vs serviço)
-    const productInvoices = invoices.filter(inv => (inv.movement_type || 'produto') === 'produto');
-    const serviceInvoices = invoices.filter(inv => inv.movement_type === 'servico');
-
-    const productRevenue = productInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-    const serviceRevenue = serviceInvoices.reduce((sum, inv) => sum + Number(inv.total_amount), 0);
-
-    // Tipos de Venda = agrupa pelos tipos de pagamento vinculados às faturas do período
-    const salesByType: Record<string, { count: number; total: number }> = {};
-    
-    invoices.forEach((invoice) => {
-      const payments = invoice.payments || [];
-      
-      if (payments.length === 0) {
-        // Fatura sem pagamento ainda - categorizar como "pending"
-        if (!salesByType["pending"]) {
-          salesByType["pending"] = { count: 0, total: 0 };
-        }
-        salesByType["pending"].count += 1;
-        salesByType["pending"].total += Number(invoice.total_amount);
-      } else {
-        // Usar o tipo do primeiro pagamento como tipo da venda
-        const mainPaymentType = payments[0].payment_type || "unknown";
-        if (!salesByType[mainPaymentType]) {
-          salesByType[mainPaymentType] = { count: 0, total: 0 };
-        }
-        salesByType[mainPaymentType].count += 1;
-        salesByType[mainPaymentType].total += Number(invoice.total_amount);
-      }
-    });
-
+    const m = metricsData;
     return {
-      totalRevenue,
-      ticketCount,
-      avgTicket,
-      salesByType,
-      productRevenue,
-      productCount: productInvoices.length,
-      serviceRevenue,
-      serviceCount: serviceInvoices.length,
+      totalRevenue:   Number(m?.total_revenue ?? 0),
+      ticketCount:    Number(m?.ticket_count ?? 0),
+      avgTicket:      Number(m?.avg_ticket ?? 0),
+      productRevenue: Number(m?.product_revenue ?? 0),
+      productCount:   Number(m?.product_count ?? 0),
+      serviceRevenue: Number(m?.service_revenue ?? 0),
+      serviceCount:   Number(m?.service_count ?? 0),
+      salesByType:    (salesByTypeRaw ?? {}) as Record<string, { count: number; total: number }>,
     };
-  }, [invoicesData]);
+  }, [metricsData, salesByTypeRaw]);
+
+
+
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
