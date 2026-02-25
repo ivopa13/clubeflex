@@ -958,6 +958,24 @@ public class DatabaseService
                 : "";
         }
 
+        // Filtro de elegibilidade: só enviar pagamentos de títulos que foram sincronizados
+        // Espelha o statusDateFilter do GetReceivablesAsync
+        var statusDateFilter = "";
+        if (fullFromDate.HasValue)
+        {
+            statusDateFilter = $@"
+            AND (
+                cr.DATVENC >= '{fullFromDate.Value:yyyy-MM-dd}'
+                OR (
+                    (cr.FLAGPAGO IS NULL OR cr.FLAGPAGO <> 'S')
+                    AND (cr.FLAGCANCELADA IS NULL OR cr.FLAGCANCELADA <> 'S')
+                )
+            )";
+            
+            if (offset == 0)
+                Log.Information($"📋 Pagamentos de títulos: apenas para títulos elegíveis (filtro de status antes de {fullFromDate.Value:dd/MM/yyyy})");
+        }
+
         var query = $@"
             SELECT FIRST {batchSize} SKIP {offset}
                 crr.ID as payment_id,
@@ -969,6 +987,7 @@ public class DatabaseService
             INNER JOIN CONTARECEBER cr ON crr.CODCR = cr.CODCR
             WHERE crr.VALOR > 0
             {dateFilter}
+            {statusDateFilter}
             ORDER BY crr.DATA DESC, crr.ID DESC";
 
         int skippedByChecksum = 0;
