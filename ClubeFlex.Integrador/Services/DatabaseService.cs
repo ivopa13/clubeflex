@@ -358,6 +358,7 @@ public class DatabaseService
 
         var batchSize = limit ?? 500;
         var dateFilter = fromDate.HasValue ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+        var invoiceDateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         var query = $@"
             SELECT FIRST {batchSize} SKIP {offset}
@@ -371,6 +372,9 @@ public class DatabaseService
             INNER JOIN MOVENDA m ON cr.CODMOVENDA = m.CODMOVENDA
             WHERE crr.VALOR > 0
             {dateFilter}
+            {invoiceDateFilter}
+            AND m.CODCLI <> 3005
+            AND TRIM(m.CODTIPOMOVIMENTO) IN ('000000007', '000000018', '000000064', '007', '018', '064', '7', '18', '64')
             ORDER BY crr.DATA ASC, crr.ID ASC";
 
         int skippedByChecksum = 0;
@@ -560,6 +564,7 @@ public class DatabaseService
 
         var batchSize = limit ?? 500;
         var dateFilter = fromDate.HasValue ? $"AND c.DEPOSITO >= '{fromDate.Value:yyyy-MM-dd}'" : "";
+        var invoiceDateFilter = fromDate.HasValue ? $"AND m.DATA >= '{fromDate.Value:yyyy-MM-dd}'" : "";
 
         var query = $@"
             SELECT FIRST {batchSize} SKIP {offset}
@@ -575,6 +580,8 @@ public class DatabaseService
                 AND (c.RETORNOU IS NULL OR c.RETORNOU <> 'S')
                 AND c.VALOR > 0
                 AND m.CODCLI <> 3005
+                {invoiceDateFilter}
+                AND TRIM(m.CODTIPOMOVIMENTO) IN ('000000007', '000000018', '000000064', '007', '018', '064', '7', '18', '64')
                 {dateFilter}
             ORDER BY c.DEPOSITO ASC";
 
