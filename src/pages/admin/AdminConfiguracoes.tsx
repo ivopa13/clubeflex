@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, Settings, Coins } from "lucide-react";
+import { Loader2, Save, Coins } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 
