@@ -29,6 +29,7 @@ import AdminPerfil from "./pages/admin/AdminPerfil";
 import AdminGerenciarCadastros from "./pages/admin/AdminGerenciarCadastros";
 import AdminVendas from "./pages/admin/AdminVendas";
 import AdminWhatsAppNotifications from "./pages/admin/AdminWhatsAppNotifications";
+import AdminConfiguracoes from "./pages/admin/AdminConfiguracoes";
 
 const queryClient = new QueryClient();
 
@@ -236,11 +237,11 @@ const App = () => (
             }
           />
           <Route
-            path="/admin/whatsapp"
+            path="/admin/configuracoes"
             element={
               <AuthGuard allowedRoles={["admin"]}>
                 <AdminLayout>
-                  <AdminWhatsAppNotifications />
+                  <AdminConfiguracoes />
                 </AdminLayout>
               </AuthGuard>
             }
