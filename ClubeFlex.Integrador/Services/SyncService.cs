@@ -328,12 +328,20 @@ public class SyncService
     {
         Log.Information($"[{project.Name}] === Sincronizando Títulos a Receber ===");
 
+        // Parsear SyncReceivablesFullFromDate do ProjectConfig
+        DateTime? fullFromDate = null;
+        if (!string.IsNullOrEmpty(project.SyncReceivablesFullFromDate) && DateTime.TryParse(project.SyncReceivablesFullFromDate, out var parsedDate))
+        {
+            fullFromDate = parsedDate;
+            Log.Information($"[{project.Name}] 📅 Filtro inteligente: abertos do histórico + tudo a partir de {parsedDate:dd/MM/yyyy}");
+        }
+
         try
         {
             var existingChecksums = await syncLogService.GetReceivableChecksumsAsync();
             var limit = _testMode ? _testModeLimit : _batchSize;
 
-            if (ignoreFromDate)
+            if (ignoreFromDate && fullFromDate == null)
                 Log.Information($"[{project.Name}] 🔓 Modo histórico: ignorando filtro de data");
 
             // === Paginação de títulos ===
@@ -345,7 +353,7 @@ public class SyncService
                 var offset = (batchNumber - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de títulos (offset {offset})...");
 
-                var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset);
+                var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset, fullFromDate);
 
                 if (receivables.Count == 0)
                 {
@@ -396,7 +404,7 @@ public class SyncService
                 var offset = (payBatch - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {payBatch} de pagamentos de títulos (offset {offset})...");
 
-                var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, ignoreFromDate, offset);
+                var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, ignoreFromDate, offset, fullFromDate);
 
                 if (payments.Count == 0)
                 {
