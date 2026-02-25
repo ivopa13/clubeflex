@@ -1,0 +1,1 @@
+ALTER TABLE public.program_settings ADD COLUMN IF NOT EXISTS point_monetary_value numeric NOT NULL DEFAULT 0.02;

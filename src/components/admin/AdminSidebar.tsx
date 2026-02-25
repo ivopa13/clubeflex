@@ -1,5 +1,6 @@
-import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign, User, UserCog, TrendingUp, MessageSquare } from "lucide-react";
+import { Home, Package, ShoppingBag, FileText, BarChart3, Users, LogOut, Database, AlertTriangle, DollarSign, User, UserCog, TrendingUp, Settings, ChevronDown } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const menuItems = [
   { title: "Dashboard", icon: Home, path: "/admin" },
@@ -25,14 +27,19 @@ const menuItems = [
   { title: "Faturas", icon: FileText, path: "/admin/faturas" },
   { title: "Pagamentos", icon: DollarSign, path: "/admin/pagamentos" },
   { title: "Relatórios", icon: BarChart3, path: "/admin/relatorios" },
+];
+
+const settingsSubItems = [
+  { title: "Geral", icon: Settings, path: "/admin/configuracoes" },
   { title: "Logs Integração", icon: Database, path: "/admin/logs" },
-  { title: "WhatsApp", icon: MessageSquare, path: "/admin/whatsapp" },
   { title: "Erros de Validação", icon: AlertTriangle, path: "/admin/erros-validacao" },
 ];
 
 export const AdminSidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const isSettingsActive = settingsSubItems.some(item => location.pathname === item.path);
+  const [settingsOpen, setSettingsOpen] = useState(isSettingsActive);
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -65,6 +72,41 @@ export const AdminSidebar = () => {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+
+              {/* Configurações - Collapsible */}
+              <SidebarMenuItem>
+                <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      className={isSettingsActive
+                        ? "bg-white/20 text-white font-medium"
+                        : "text-white/80 hover:bg-white/10 hover:text-white"}
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span>Configurações</span>
+                      <ChevronDown className={`h-3 w-3 ml-auto transition-transform ${settingsOpen ? "rotate-180" : ""}`} />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenu className="pl-4 mt-1">
+                      {settingsSubItems.map((item) => (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            onClick={() => navigate(item.path)}
+                            isActive={location.pathname === item.path}
+                            className={location.pathname === item.path
+                              ? "bg-white/20 text-white font-medium"
+                              : "text-white/60 hover:bg-white/10 hover:text-white"}
+                          >
+                            <item.icon className="h-3.5 w-3.5" />
+                            <span className="text-sm">{item.title}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
