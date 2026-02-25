@@ -47,6 +47,16 @@ public class ProjectConfig
     public bool SyncReceivablesIgnoreDate { get; set; } = true;
 
     /// <summary>
+    /// Data de corte para sincronização completa de títulos.
+    /// Títulos com vencimento ANTES desta data: sincroniza apenas os em aberto (não pagos, não cancelados).
+    /// Títulos com vencimento A PARTIR desta data: sincroniza todos (abertos, pagos, cancelados).
+    /// Pagamentos de títulos: sincroniza apenas os com data a partir desta data.
+    /// Se null, sincroniza tudo sem filtro de status.
+    /// Formato: "yyyy-MM-dd"
+    /// </summary>
+    public string? SyncReceivablesFullFromDate { get; set; }
+
+    /// <summary>
     /// Valida se a configuração do projeto está completa
     /// </summary>
     public bool IsValid()

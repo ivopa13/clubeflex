@@ -715,7 +715,7 @@ public class DatabaseService
     /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
     /// <param name="existingChecksums">Checksums existentes para comparar e evitar reenvio de dados inalterados</param>
     /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
-    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0)
+    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
     {
         var receivables = new List<TituloPayload>();
 
@@ -726,7 +726,26 @@ public class DatabaseService
             ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'" 
             : "";
         
-        if (ignoreFromDate && offset == 0)
+        // Filtro inteligente: antes de fullFromDate apenas abertos, a partir de fullFromDate tudo
+        var statusDateFilter = "";
+        if (fullFromDate.HasValue)
+        {
+            statusDateFilter = $@"
+            AND (
+                cr.DATVENC >= '{fullFromDate.Value:yyyy-MM-dd}'
+                OR (
+                    (cr.FLAGPAGO IS NULL OR cr.FLAGPAGO <> 'S')
+                    AND (cr.FLAGCANCELADA IS NULL OR cr.FLAGCANCELADA <> 'S')
+                )
+            )";
+            
+            if (offset == 0)
+            {
+                Log.Information($"📋 Filtro inteligente ativo: antes de {fullFromDate.Value:dd/MM/yyyy} apenas abertos, a partir dessa data tudo");
+            }
+        }
+        
+        if (ignoreFromDate && offset == 0 && !fullFromDate.HasValue)
         {
             Log.Information("📋 Buscando TODOS os títulos (abertos, pagos e cancelados, sem filtro de data)");
         }
@@ -754,6 +773,7 @@ public class DatabaseService
             INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
             WHERE cr.VALOR > 0
             {dateFilter}
+            {statusDateFilter}
             ORDER BY cr.DATVENC ASC, cr.CODCR ASC";
 
         int skippedByChecksum = 0;
@@ -909,14 +929,27 @@ public class DatabaseService
     /// Busca pagamentos de títulos a receber (CONTARECEBERREC) para sincronização
     /// Usado pelo sistema de cobranças (Financeiro)
     /// </summary>
-    public async Task<List<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0)
+    public async Task<List<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
     {
         var payments = new List<TituloPagamentoPayload>();
 
         var batchSize = limit ?? 500;
-        var dateFilter = (fromDate.HasValue && !ignoreFromDate) 
-            ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" 
-            : "";
+        
+        // Se fullFromDate está configurado, forçar filtro de pagamentos a partir dessa data
+        // (pagamentos antigos de títulos já quitados não serão enviados)
+        string dateFilter;
+        if (fullFromDate.HasValue)
+        {
+            dateFilter = $"AND crr.DATA >= '{fullFromDate.Value:yyyy-MM-dd}'";
+            if (offset == 0)
+                Log.Information($"📋 Pagamentos de títulos: apenas a partir de {fullFromDate.Value:dd/MM/yyyy}");
+        }
+        else
+        {
+            dateFilter = (fromDate.HasValue && !ignoreFromDate) 
+                ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" 
+                : "";
+        }
 
         var query = $@"
             SELECT FIRST {batchSize} SKIP {offset}
