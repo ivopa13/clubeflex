@@ -1,61 +1,26 @@
 
-## Correção do Mapeamento de CODTIPOMOVIMENTO no Integrador
 
-### Problema Identificado
+## Análise: O integrador já está correto
 
-O campo `CODTIPOMOVIMENTO` na tabela `MOVENDA` do Firebird é armazenado com zeros à esquerda (formato `000000007`, `000000018`, `000000073`). O código atual compara com `"064"` sem zeros — essa comparação **nunca** retorna verdadeiro.
+Após revisar o código-fonte do integrador (`DatabaseService.cs` e `SyncService.cs`), concluo que **nenhuma alteração é necessária**. O assistente do projeto Financeiro fez suposições incorretas sobre o código. Veja a comparação:
 
-Além disso, a lógica atual aceita qualquer movimento que não seja "064" como produto, incluindo movimentos que **não são vendas** (devoluções, transferências, compras de mercadoria, etc.), o que polui os dados de faturamento.
+### Status dos 5 pontos levantados
 
-### Regra de Negócio Definida
+| Ponto | Recomendação recebida | Situação real no código |
+|-------|----------------------|------------------------|
+| 1. Filtro de status | Adicionar `WHERE status IN ('A','P','PP','C')` | **Já correto.** A query (linha 755) usa `WHERE cr.VALOR > 0` sem filtro de status. O status é derivado das flags `FLAGPAGO` e `FLAGCANCELADA` na linha 837-838. Todos os títulos (abertos, pagos, cancelados) já são extraídos. |
+| 2. Filtro de data | Usar `issued_at >= '2022-01-01'` | **Já correto.** O projeto Financeiro tem `SyncReceivablesIgnoreDate: true`, que desabilita qualquer filtro de data (linha 725). A query roda sem restrição temporal. |
+| 3. Batch size | Aumentar para 500-1000 | **Já correto.** `BatchSize` está configurado como 500 no `appsettings.json` com paginação automática via loop `while` + `SKIP {offset}`. |
+| 4. Ordem de sincronização | Títulos antes de pagamentos | **Já correto.** Em `SyncReceivablesForProjectAsync`, títulos são paginados e enviados primeiro, pagamentos depois (linhas 330-420 do SyncService). |
+| 5. Não retentar 400 | Ignorar erros HTTP 4xx | **Já correto.** `SendWithRetryAsync` detecta `IsValidationError` (4xx) e não retenta. |
 
-Conforme as tabelas enviadas:
+### Conclusão
 
-| CODIGO | NOMETIPOMOVIMENTO | Classificação |
-|--------|-------------------|---------------|
-| 007    | PRE VENDA         | produto       |
-| 018    | ORÇAMENTO         | produto       |
-| 064    | VENDA DE SERVIÇOS | servico       |
-| qualquer outro | — | **ignorar** (não sincronizar) |
+O código do integrador já implementa tudo o que foi solicitado. O gap de dados (2022-2026) pode ter outra causa:
 
-### Mudanças no `DatabaseService.cs`
+- O integrador pode não ter sido executado durante esse período
+- Pode haver um problema no lado do projeto Financeiro (edge functions rejeitando dados)
+- Os checksums podem estar impedindo reenvio de dados já sincronizados anteriormente
 
-**Linha 171–175** — Substituir a lógica atual por:
+**Próximo passo recomendado:** Execute o integrador com `run-sync.bat` (não o histórico) e traga os logs completos da execução para que possamos analisar quantos títulos estão sendo encontrados no ERP e quantos estão sendo enviados vs. pulados por checksum.
 
-```csharp
-// Normaliza removendo zeros à esquerda (000000007 → 7)
-var movementTypeCode = reader.IsDBNull(reader.GetOrdinal("movement_type_code"))
-    ? null
-    : reader["movement_type_code"].ToString()?.Trim().TrimStart('0');
-
-// Apenas códigos 7 (Pré Venda) e 18 (Orçamento) = produto
-// Código 64 (Venda de Serviços) = servico
-// Qualquer outro código: ignorar (não é uma venda válida)
-string movementType;
-if (movementTypeCode == "7" || movementTypeCode == "18")
-    movementType = "produto";
-else if (movementTypeCode == "64")
-    movementType = "servico";
-else
-{
-    Log.Debug($"⏭️ Fatura {invoiceId} ignorada: tipo de movimento {movementTypeCode} não é venda");
-    continue;
-}
-```
-
-### Impacto nos Dados Históricos
-
-Faturas já sincronizadas no banco de dados estão classificadas incorretamente:
-- Faturas com código `007` e `018` → provavelmente já estão como `produto` (OK)
-- Faturas com código `064` → estão como `produto` (ERRADO — deveriam ser `servico`)
-- Faturas com outros códigos (devoluções, transferências etc.) → já estão no banco como `produto` (ERRADO — não deveriam estar)
-
-Para os dados históricos, será necessário rodar a edge function `update-invoice-types` que já existe no projeto, ou executar uma query SQL no banco para reclassificar os registros baseando-se no `invoice_id_ext` mapeado.
-
-### Arquivos a Modificar
-
-- **`ClubeFlex.Integrador/Services/DatabaseService.cs`** — linhas 171–175: substituir lógica de classificação pelo novo mapeamento com `TrimStart('0')` e filtro explícito dos três códigos válidos.
-
-### Observação Técnica
-
-O filtro na query SQL (`WHERE m.VALORTOTALNOTA > 0`) já elimina parte dos movimentos indesejados, mas não todos — devoluções e outros movimentos com valor positivo passariam sem o filtro por tipo. Com a mudança, o `continue` no loop C# garante que apenas faturas com código 007, 018 ou 064 sejam enviadas ao ClubeFlex.
