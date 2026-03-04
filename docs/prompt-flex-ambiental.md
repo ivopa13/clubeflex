@@ -256,16 +256,18 @@ Edge Functions: obrigatoriamente kebab-case nos nomes (ex: cliente-sync, sync-lo
 
 ## ⚙️ Configuração do Integrador (no projeto ClubeFlex)
 
-Quando o projeto Flex Ambiental estiver criado, adicionar ao `appsettings.json` do integrador:
+A configuração já foi adicionada ao `appsettings.json` do integrador no projeto ClubeFlex:
 
 ```json
 {
   "Name": "FlexAmbiental",
-  "BaseUrl": "https://<PROJECT_ID>.supabase.co/functions/v1",
-  "ApiKey": "<ANON_KEY>",
+  "BaseUrl": "https://ksfdrhkiefwwbpjpbvqu.supabase.co/functions/v1",
+  "ApiKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...(anon key)",
   "SyncInvoices": false,
   "SyncPayments": false,
   "SyncReceivables": false,
   "SyncCustomers": true
 }
 ```
+
+**Status:** ✅ Configurado e pronto para teste.
