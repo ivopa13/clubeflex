@@ -1076,7 +1076,6 @@ public class DatabaseService
             return false;
         }
     }
-}
 
     /// <summary>
     /// Busca clientes da tabela CLIENTE do Firebird para sincronização dedicada
@@ -1171,3 +1170,4 @@ public class DatabaseService
 
         return customers;
     }
+}
