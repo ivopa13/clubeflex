@@ -142,6 +142,9 @@ public class SyncService
             if (project.SyncReceivables)
                 await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate);
 
+            if (project.SyncCustomers)
+                await SyncCustomersForProjectAsync(project, apiService, syncLogService, counters);
+
             Log.Information($"[{project.Name}] ✅ Concluído: {counters.SuccessCount} sucesso, {counters.ErrorCount} erros");
         }
         catch (Exception ex)
@@ -151,7 +154,7 @@ public class SyncService
         finally
         {
             var status = counters.ErrorCount > 0 ? "completed_with_errors" : "completed";
-            var total = counters.InvoiceCount + counters.PaymentCount;
+            var total = counters.InvoiceCount + counters.PaymentCount + counters.CustomerCount;
             await syncLogService.FinishExecutionAsync(status, total, counters.SuccessCount, counters.ErrorCount, counters.InvoiceCount, counters.PaymentCount);
         }
     }
@@ -506,7 +509,74 @@ public class SyncService
     {
         public int InvoiceCount { get; set; }
         public int PaymentCount { get; set; }
+        public int CustomerCount { get; set; }
         public int SuccessCount { get; set; }
         public int ErrorCount { get; set; }
+    }
+
+    private async Task SyncCustomersForProjectAsync(
+        ProjectConfig project,
+        ProjectApiService apiService,
+        ProjectSyncLogService syncLogService,
+        SyncCounters counters)
+    {
+        Log.Information($"[{project.Name}] === Sincronizando Clientes ===");
+
+        try
+        {
+            var existingChecksums = await syncLogService.GetCustomerChecksumsAsync();
+            var limit = _testMode ? _testModeLimit : _batchSize;
+
+            int totalCustomers = 0, totalSuccess = 0, totalErrors = 0, batchNumber = 0;
+
+            while (true)
+            {
+                batchNumber++;
+                var offset = (batchNumber - 1) * limit;
+                Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de clientes (offset {offset})...");
+
+                var customers = await _databaseService.GetCustomersAsync(limit, existingChecksums, offset);
+
+                if (customers.Count == 0)
+                {
+                    Log.Information(batchNumber == 1
+                        ? $"[{project.Name}] Nenhum cliente novo ou alterado"
+                        : $"[{project.Name}] Clientes: {batchNumber - 1} lotes processados");
+                    break;
+                }
+
+                totalCustomers += customers.Count;
+                Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {customers.Count} clientes");
+
+                foreach (var customer in customers)
+                {
+                    var result = await SendWithRetryAsync(
+                        async () => await apiService.SendCustomerAsync(customer),
+                        customer.EventId, project.Name);
+
+                    await syncLogService.SaveSyncLogAsync(new SyncLog
+                    {
+                        EventId = customer.EventId,
+                        EventType = "cliente",
+                        Status = result.Success ? "success" : "error",
+                        ErrorMessage = result.ErrorMessage,
+                        Payload = customer.Checksum != null ? $"{{\"checksum\":\"{customer.Checksum}\"}}" : null
+                    });
+
+                    counters.CustomerCount++;
+                    if (result.Success) { counters.SuccessCount++; totalSuccess++; }
+                    else { counters.ErrorCount++; totalErrors++; }
+                }
+
+                if (customers.Count < limit || _testMode) break;
+            }
+
+            if (totalCustomers > 0)
+                Log.Information($"[{project.Name}] 📊 Clientes: {totalCustomers} processados, {totalSuccess} sucesso, {totalErrors} erros");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, $"[{project.Name}] Erro ao sincronizar clientes");
+        }
     }
 }

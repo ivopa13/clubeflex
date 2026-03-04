@@ -93,11 +93,13 @@ class Program
                     var syncInvoices = project["SyncInvoices"] == "True" || project["SyncInvoices"] == "true";
                     var syncPayments = project["SyncPayments"] == "True" || project["SyncPayments"] == "true";
                     var syncReceivables = project["SyncReceivables"] == "True" || project["SyncReceivables"] == "true";
+                    var syncCustomers = project["SyncCustomers"] == "True" || project["SyncCustomers"] == "true";
                     
                     var syncs = new List<string>();
                     if (syncInvoices) syncs.Add("faturas");
                     if (syncPayments) syncs.Add("pagamentos");
                     if (syncReceivables) syncs.Add("títulos");
+                    if (syncCustomers) syncs.Add("clientes");
                     
                     Console.WriteLine($"  📦 {name}: {string.Join(", ", syncs)}");
                 }

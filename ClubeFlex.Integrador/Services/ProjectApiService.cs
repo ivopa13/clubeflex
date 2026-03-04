@@ -74,6 +74,14 @@ public class ProjectApiService
     }
 
     /// <summary>
+    /// Envia cliente para o projeto
+    /// </summary>
+    public async Task<ApiResponse> SendCustomerAsync(ClientePayload payload)
+    {
+        return await PostAsync("/cliente-sync", payload, $"cliente {payload.CustomerIdExt}");
+    }
+
+    /// <summary>
     /// Atualiza tipos de movimento das faturas em batch
     /// </summary>
     public async Task<ApiResponse> UpdateInvoiceTypesAsync(List<(string InvoiceIdExt, string MovementType)> invoiceTypes)

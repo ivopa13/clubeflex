@@ -134,6 +134,7 @@ public class ProjectSyncLogService
                 "pagamento-confirmado" or "payment_confirmed" or "pagamento" => "pagamento",
                 "titulo-criado" or "titulo" => "titulo",
                 "titulo-pago" => "titulo_pagamento",
+                "cliente" => "cliente",
                 _ => log.EventType
             };
 
@@ -230,11 +231,18 @@ public class ProjectSyncLogService
 
     /// <summary>
     /// Busca checksums dos pagamentos de títulos já sincronizados para comparação
-    /// Retorna Dictionary com event_id -> checksum
     /// </summary>
     public async Task<Dictionary<string, string>> GetReceivablePaymentChecksumsAsync()
     {
         return await GetChecksumsAsync("titulo_pagamento", "pagamentos de títulos");
+    }
+
+    /// <summary>
+    /// Busca checksums dos clientes já sincronizados para comparação
+    /// </summary>
+    public async Task<Dictionary<string, string>> GetCustomerChecksumsAsync()
+    {
+        return await GetChecksumsAsync("cliente", "clientes");
     }
 
     /// <summary>
