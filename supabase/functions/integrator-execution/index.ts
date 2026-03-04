@@ -33,6 +33,7 @@ Deno.serve(async (req) => {
           execution_id: body.execution_id,
           started_at: new Date().toISOString(),
           status: 'running',
+          project_name: body.project_name || 'ClubeFlex',
         })
         .select()
         .single();

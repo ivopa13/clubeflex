@@ -47,7 +47,8 @@ public class ProjectSyncLogService
             var payload = new
             {
                 action = "start",
-                execution_id = _currentExecutionId
+                execution_id = _currentExecutionId,
+                project_name = _projectName
             };
 
             var json = JsonSerializer.Serialize(payload);
