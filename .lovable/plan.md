@@ -1,40 +1,51 @@
 
 
-## Plano: Exibir nome do projeto em cada execucao nos logs
+## Plano: Adicionar campos de endereco na sincronizacao de clientes
 
-### Situacao atual
+### Alteracoes necessarias
 
-A tabela `integrator_executions` nao tem coluna `project_name`. Porem, o `execution_id` ja contem o nome do projeto no formato `EXEC_ClubeFlex_20260304_HHmmss_xxxx`. Temos duas opcoes:
+**1. Database -- adicionar colunas de endereco na tabela `customers`**
 
-1. **Extrair do execution_id no frontend** (rapido, sem mudanca no backend)
-2. **Adicionar coluna `project_name`** (mais robusto, permite filtros e queries)
-
-Recomendo a **opcao 2** por ser mais limpa e permitir filtros futuros.
-
-### Alteracoes
-
-**1. Database** -- adicionar coluna `project_name` na tabela `integrator_executions`
 ```sql
-ALTER TABLE public.integrator_executions 
-ADD COLUMN project_name text DEFAULT 'ClubeFlex';
--- Preencher dados existentes extraindo do execution_id
-UPDATE public.integrator_executions 
-SET project_name = split_part(execution_id, '_', 2)
-WHERE execution_id LIKE 'EXEC_%';
+ALTER TABLE public.customers
+  ADD COLUMN address_street text,
+  ADD COLUMN address_number text,
+  ADD COLUMN address_complement text,
+  ADD COLUMN address_neighborhood text,
+  ADD COLUMN address_city text,
+  ADD COLUMN address_state text,
+  ADD COLUMN address_zip text;
 ```
 
-**2. Edge function `integrator-execution`** -- receber e salvar `project_name` no `start`
-- Aceitar campo `project_name` no body
-- Inserir na tabela junto com os demais campos
+**2. Edge Function `cliente-sync` -- criar (nao existe ainda neste projeto)**
 
-**3. Integrador C# `ProjectSyncLogService.cs`** -- enviar `project_name` no payload de start
-- Adicionar `project_name = _projectName` no objeto enviado ao endpoint
+Criar `supabase/functions/cliente-sync/index.ts` com:
+- CORS headers
+- Recebe payload com campos basicos + endereco
+- UPSERT por `customer_id_ext`
+- Campo `doc` = CPF ou CNPJ (o que nao for nulo)
+- Salva campos de endereco
+- Registra em `sync_logs`
+- Adicionar ao `config.toml` com `verify_jwt = false`
 
-**4. Frontend `AdminSyncLogs.tsx`** -- agrupar ou indicar projeto
-- Exibir badge com nome do projeto em cada execucao no accordion
-- Adicionar filtro por projeto (botoes como os de data)
+**3. Integrador C# `ClientePayload.cs` -- adicionar campos de endereco**
 
-### UI esperada
+Novos campos: `Street`, `Number`, `Complement`, `Neighborhood`, `City`, `State`, `ZipCode`. Incluir no calculo do checksum para detectar alteracoes de endereco.
 
-Cada item do accordion mostrara um badge colorido (ex: "ClubeFlex" em laranja, "Financeiro" em azul) ao lado da data/hora. Filtros por projeto aparecerao abaixo dos filtros de data.
+**4. Integrador C# `DatabaseService.cs` -- mapear colunas do Firebird**
+
+Adicionar na query SQL os campos da tabela CLIENTE do Firebird. Campos tipicos:
+- `ENDERECO` → street
+- `NUMERO` → number  
+- `COMPLEMENTO` → complement
+- `BAIRRO` → neighborhood
+- `CIDADE` → city
+- `UF` → state
+- `CEP` → zip
+
+> **Nota:** Os nomes exatos das colunas no Firebird precisam ser confirmados. Usarei os nomes mais comuns em sistemas ERP brasileiros. Se forem diferentes, basta ajustar.
+
+**5. Integrador C# `DatabaseService.cs` -- popular payload com endereco**
+
+Mapear os novos campos lidos do Firebird para o `ClientePayload`.
 
