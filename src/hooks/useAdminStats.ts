@@ -67,10 +67,20 @@ export const useAdminStats = () => {
         .order("created_at", { ascending: false })
         .limit(5);
 
+      // Valor do ponto
+      const { data: settings } = await supabase
+        .from("program_settings")
+        .select("point_monetary_value")
+        .limit(1)
+        .maybeSingle();
+
+      const pointValue = Number((settings as any)?.point_monetary_value ?? 0.02);
+
       return {
         totalPending,
         totalRedeemable,
         totalRedeemedThisMonth,
+        pointMonetaryValue: pointValue,
         recentRedemptions: recentRedemptions || [],
         recentInvoices: recentInvoices || [],
       };
