@@ -1097,7 +1097,8 @@ public class DatabaseService
                 c.ENDERECO as customer_street,
                 c.BAIRRO as customer_neighborhood,
                 c.CIDADE as customer_city,
-                c.ESTADO as customer_state
+                c.ESTADO as customer_state,
+                c.CEP as customer_zip
             FROM CLIENTE c
             WHERE c.CODCLI <> 3005
             ORDER BY c.CODCLI ASC";
@@ -1150,7 +1151,10 @@ public class DatabaseService
                         : reader["customer_city"].ToString()?.Trim(),
                     State = reader.IsDBNull(reader.GetOrdinal("customer_state"))
                         ? null
-                        : reader["customer_state"].ToString()?.Trim()
+                        : reader["customer_state"].ToString()?.Trim(),
+                    ZipCode = reader.IsDBNull(reader.GetOrdinal("customer_zip"))
+                        ? null
+                        : reader["customer_zip"].ToString()?.Trim()
                 };
 
                 payload.CalculateChecksum();
