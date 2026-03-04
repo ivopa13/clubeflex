@@ -1093,7 +1093,14 @@ public class DatabaseService
                 c.CPF as customer_cpf,
                 c.CNPJ as customer_cnpj,
                 c.EMAIL as customer_email,
-                c.TELEFONE as customer_phone
+                c.TELEFONE as customer_phone,
+                c.ENDERECO as customer_street,
+                c.NUMERO as customer_number,
+                c.COMPLEMENTO as customer_complement,
+                c.BAIRRO as customer_neighborhood,
+                c.CIDADE as customer_city,
+                c.UF as customer_state,
+                c.CEP as customer_zip
             FROM CLIENTE c
             WHERE c.CODCLI <> 3005
             ORDER BY c.CODCLI ASC";
@@ -1134,7 +1141,28 @@ public class DatabaseService
                     Phone = reader.IsDBNull(reader.GetOrdinal("customer_phone"))
                         ? null
                         : reader["customer_phone"].ToString(),
-                    Status = "active"
+                    Status = "active",
+                    Street = reader.IsDBNull(reader.GetOrdinal("customer_street"))
+                        ? null
+                        : reader["customer_street"].ToString()?.Trim(),
+                    Number = reader.IsDBNull(reader.GetOrdinal("customer_number"))
+                        ? null
+                        : reader["customer_number"].ToString()?.Trim(),
+                    Complement = reader.IsDBNull(reader.GetOrdinal("customer_complement"))
+                        ? null
+                        : reader["customer_complement"].ToString()?.Trim(),
+                    Neighborhood = reader.IsDBNull(reader.GetOrdinal("customer_neighborhood"))
+                        ? null
+                        : reader["customer_neighborhood"].ToString()?.Trim(),
+                    City = reader.IsDBNull(reader.GetOrdinal("customer_city"))
+                        ? null
+                        : reader["customer_city"].ToString()?.Trim(),
+                    State = reader.IsDBNull(reader.GetOrdinal("customer_state"))
+                        ? null
+                        : reader["customer_state"].ToString()?.Trim(),
+                    ZipCode = reader.IsDBNull(reader.GetOrdinal("customer_zip"))
+                        ? null
+                        : reader["customer_zip"].ToString()?.Trim()
                 };
 
                 payload.CalculateChecksum();

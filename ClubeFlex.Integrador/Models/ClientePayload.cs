@@ -37,6 +37,27 @@ public class ClientePayload
     [JsonProperty("status")]
     public string Status { get; set; } = "active";
 
+    [JsonProperty("street")]
+    public string? Street { get; set; }
+
+    [JsonProperty("number")]
+    public string? Number { get; set; }
+
+    [JsonProperty("complement")]
+    public string? Complement { get; set; }
+
+    [JsonProperty("neighborhood")]
+    public string? Neighborhood { get; set; }
+
+    [JsonProperty("city")]
+    public string? City { get; set; }
+
+    [JsonProperty("state")]
+    public string? State { get; set; }
+
+    [JsonProperty("zip_code")]
+    public string? ZipCode { get; set; }
+
     /// <summary>
     /// Checksum MD5 dos campos principais para detectar alterações
     /// </summary>
@@ -48,7 +69,7 @@ public class ClientePayload
     /// </summary>
     public void CalculateChecksum()
     {
-        var dataToHash = $"{CustomerIdExt}|{Name}|{Cpf}|{Cnpj}|{Email}|{Phone}|{Status}";
+        var dataToHash = $"{CustomerIdExt}|{Name}|{Cpf}|{Cnpj}|{Email}|{Phone}|{Status}|{Street}|{Number}|{Complement}|{Neighborhood}|{City}|{State}|{ZipCode}";
         
         using var md5 = MD5.Create();
         var inputBytes = Encoding.UTF8.GetBytes(dataToHash);
