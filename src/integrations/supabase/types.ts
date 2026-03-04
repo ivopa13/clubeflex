@@ -339,6 +339,8 @@ export type Database = {
           earn_rate_specifier: number
           id: string
           point_monetary_value: number
+          points_enabled_customer: boolean
+          points_enabled_specifier: boolean
           points_expiration_days: number | null
           updated_at: string | null
         }
@@ -348,6 +350,8 @@ export type Database = {
           earn_rate_specifier?: number
           id?: string
           point_monetary_value?: number
+          points_enabled_customer?: boolean
+          points_enabled_specifier?: boolean
           points_expiration_days?: number | null
           updated_at?: string | null
         }
@@ -357,6 +361,8 @@ export type Database = {
           earn_rate_specifier?: number
           id?: string
           point_monetary_value?: number
+          points_enabled_customer?: boolean
+          points_enabled_specifier?: boolean
           points_expiration_days?: number | null
           updated_at?: string | null
         }

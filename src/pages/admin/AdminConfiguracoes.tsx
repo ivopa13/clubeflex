@@ -4,13 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Loader2, Save, Coins } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Save, Coins, Users } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 
 export default function AdminConfiguracoes() {
   const queryClient = useQueryClient();
   const [pointValue, setPointValue] = useState("");
+  const [pointsEnabledCustomer, setPointsEnabledCustomer] = useState(true);
+  const [pointsEnabledSpecifier, setPointsEnabledSpecifier] = useState(true);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ["program-settings"],
@@ -28,6 +31,8 @@ export default function AdminConfiguracoes() {
   useEffect(() => {
     if (settings) {
       setPointValue(String((settings as any).point_monetary_value ?? "0.02"));
+      setPointsEnabledCustomer((settings as any).points_enabled_customer ?? true);
+      setPointsEnabledSpecifier((settings as any).points_enabled_specifier ?? true);
     }
   }, [settings]);
 
@@ -49,6 +54,24 @@ export default function AdminConfiguracoes() {
     },
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: async ({ field, value }: { field: string; value: boolean }) => {
+      if (!settings?.id) throw new Error("Settings not found");
+      const { error } = await supabase
+        .from("program_settings")
+        .update({ [field]: value } as any)
+        .eq("id", settings.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Configuração atualizada!");
+      queryClient.invalidateQueries({ queryKey: ["program-settings"] });
+    },
+    onError: () => {
+      toast.error("Erro ao atualizar configuração.");
+    },
+  });
+
   const handleSave = () => {
     const value = parseFloat(pointValue.replace(",", "."));
     if (isNaN(value) || value <= 0) {
@@ -56,6 +79,16 @@ export default function AdminConfiguracoes() {
       return;
     }
     mutation.mutate(value);
+  };
+
+  const handleToggleCustomer = (checked: boolean) => {
+    setPointsEnabledCustomer(checked);
+    toggleMutation.mutate({ field: "points_enabled_customer", value: checked });
+  };
+
+  const handleToggleSpecifier = (checked: boolean) => {
+    setPointsEnabledSpecifier(checked);
+    toggleMutation.mutate({ field: "points_enabled_specifier", value: checked });
   };
 
   if (isLoading) {
@@ -116,6 +149,47 @@ export default function AdminConfiguracoes() {
             <p>• 100 pontos = R$ {(parseFloat((pointValue || "0").replace(",", ".")) * 100 || 0).toFixed(2)}</p>
             <p>• 500 pontos = R$ {(parseFloat((pointValue || "0").replace(",", ".")) * 500 || 0).toFixed(2)}</p>
             <p>• 1.000 pontos = R$ {(parseFloat((pointValue || "0").replace(",", ".")) * 1000 || 0).toFixed(2)}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Acúmulo de Pontos
+          </CardTitle>
+          <CardDescription>
+            Ative ou desative o acúmulo de pontos para cada tipo de participante. A alteração vale a partir desta data — pontos já atribuídos não serão afetados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-base font-medium">Clientes (Customers)</Label>
+              <p className="text-sm text-muted-foreground">
+                Permitir que clientes acumulem pontos em novas compras
+              </p>
+            </div>
+            <Switch
+              checked={pointsEnabledCustomer}
+              onCheckedChange={handleToggleCustomer}
+              disabled={toggleMutation.isPending}
+            />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div className="space-y-0.5">
+              <Label className="text-base font-medium">Especificadores (Specifiers)</Label>
+              <p className="text-sm text-muted-foreground">
+                Permitir que especificadores acumulem pontos em novas indicações
+              </p>
+            </div>
+            <Switch
+              checked={pointsEnabledSpecifier}
+              onCheckedChange={handleToggleSpecifier}
+              disabled={toggleMutation.isPending}
+            />
           </div>
         </CardContent>
       </Card>
