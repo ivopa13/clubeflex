@@ -40,6 +40,11 @@ public class ProjectConfig
     public bool SyncReceivables { get; set; } = false;
 
     /// <summary>
+    /// Se verdadeiro, sincroniza a base de clientes (CLIENTE) para este projeto
+    /// </summary>
+    public bool SyncCustomers { get; set; } = false;
+
+    /// <summary>
     /// Se verdadeiro, ignora o filtro de data ao buscar títulos a receber.
     /// Necessário para régua de cobrança que precisa considerar dívidas antigas (vencidas).
     /// Default: true quando SyncReceivables = true
@@ -64,7 +69,7 @@ public class ProjectConfig
         return !string.IsNullOrEmpty(Name) 
             && !string.IsNullOrEmpty(BaseUrl) 
             && !string.IsNullOrEmpty(ApiKey)
-            && (SyncInvoices || SyncPayments || SyncReceivables);
+            && (SyncInvoices || SyncPayments || SyncReceivables || SyncCustomers);
     }
 
     /// <summary>
@@ -76,6 +81,7 @@ public class ProjectConfig
         if (SyncInvoices) syncs.Add("faturas");
         if (SyncPayments) syncs.Add("pagamentos");
         if (SyncReceivables) syncs.Add("títulos a receber");
+        if (SyncCustomers) syncs.Add("clientes");
         return syncs.Count > 0 ? string.Join(", ", syncs) : "nada";
     }
 }

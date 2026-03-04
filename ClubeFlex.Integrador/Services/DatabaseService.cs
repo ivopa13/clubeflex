@@ -1077,3 +1077,97 @@ public class DatabaseService
         }
     }
 }
+
+    /// <summary>
+    /// Busca clientes da tabela CLIENTE do Firebird para sincronização dedicada
+    /// Usa checksum para evitar reenvio de dados não alterados
+    /// </summary>
+    public async Task<List<ClientePayload>> GetCustomersAsync(int? limit = null, Dictionary<string, string>? existingChecksums = null, int offset = 0)
+    {
+        var customers = new List<ClientePayload>();
+        var batchSize = limit ?? 500;
+
+        var query = $@"
+            SELECT FIRST {batchSize} SKIP {offset}
+                c.CODCLI as customer_id,
+                c.NOMECLI as customer_name,
+                c.CPF as customer_cpf,
+                c.CNPJ as customer_cnpj,
+                c.EMAIL as customer_email,
+                c.TELEFONE as customer_phone
+            FROM CLIENTE c
+            WHERE c.CODCLI <> 3005
+            ORDER BY c.CODCLI ASC";
+
+        int skippedByChecksum = 0;
+
+        try
+        {
+            using var connection = new FbConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = new FbCommand(query, connection);
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                var customerId = reader["customer_id"].ToString() ?? "";
+                var eventId = $"CLI_{customerId}";
+
+                var cpf = reader.IsDBNull(reader.GetOrdinal("customer_cpf"))
+                    ? null
+                    : reader["customer_cpf"].ToString()?.Trim();
+
+                var cnpj = reader.IsDBNull(reader.GetOrdinal("customer_cnpj"))
+                    ? null
+                    : reader["customer_cnpj"].ToString()?.Trim();
+
+                var payload = new ClientePayload
+                {
+                    EventId = eventId,
+                    CustomerIdExt = customerId,
+                    Name = reader["customer_name"].ToString() ?? "",
+                    Cpf = cpf,
+                    Cnpj = cnpj,
+                    Email = reader.IsDBNull(reader.GetOrdinal("customer_email"))
+                        ? null
+                        : reader["customer_email"].ToString(),
+                    Phone = reader.IsDBNull(reader.GetOrdinal("customer_phone"))
+                        ? null
+                        : reader["customer_phone"].ToString(),
+                    Status = "active"
+                };
+
+                payload.CalculateChecksum();
+
+                // Comparar com checksum existente
+                if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
+                {
+                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
+                    {
+                        Log.Debug($"⏭️ Cliente {customerId} sem alterações (checksum igual)");
+                        skippedByChecksum++;
+                        continue;
+                    }
+                    else
+                    {
+                        Log.Debug($"🔄 Cliente {customerId} alterado - checksum anterior: {existingChecksum}, novo: {payload.Checksum}");
+                    }
+                }
+
+                customers.Add(payload);
+            }
+
+            Log.Information($"📋 Encontrados {customers.Count} clientes novos/alterados para sincronizar");
+
+            if (skippedByChecksum > 0)
+                Log.Information($"⏭️ {skippedByChecksum} clientes pulados (sem alterações - checksum igual)");
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Erro ao buscar clientes do banco de dados");
+            throw;
+        }
+
+        return customers;
+    }
