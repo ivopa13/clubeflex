@@ -1,58 +1,39 @@
 
 
-## Plano: Sincronização de Clientes para o Projeto Flex Ambiental
+## Diagnostico: Por que o integrador re-sincroniza tudo toda vez
 
-### Contexto
+### Causa raiz
 
-O integrador C# já suporta múltiplos projetos via array em `appsettings.json`. Atualmente sincroniza: faturas, pagamentos e títulos a receber. Cada tipo de dado já inclui os dados do cliente embutidos no payload (CustomerData). O que precisamos é adicionar uma **sincronização dedicada de clientes** — enviar apenas a base de clientes (tabela CLIENTES do Firebird) para o novo projeto, sem faturas/pagamentos.
+A tabela `sync_logs` tem **RLS (Row Level Security)** ativo com apenas uma policy de SELECT que exige `has_role(auth.uid(), 'admin')`. O integrador C# usa a **anon key** (sem autenticacao), entao quando tenta carregar os checksums existentes via PostgREST (`/rest/v1/sync_logs?...`), recebe **zero resultados**. Resultado: o integrador acha que nenhum registro foi sincronizado antes e re-envia tudo.
 
-### O que será feito
+Numeros do problema:
+- 5193 faturas no sync_logs, mas o integrador nao ve nenhuma
+- ~2500 faturas + ~950 pagamentos re-enviados a cada execucao (~3400 eventos)
+- 83.543 linhas de log em um unico dia (5+ execucoes)
+- Cada execucao leva ~1h30 quando deveria levar segundos (apenas novos registros)
 
-**1. Novo flag no ProjectConfig: `SyncCustomers`**
-- Adicionar `SyncCustomers` (bool, default false) em `ProjectConfig.cs`
-- Atualizar `GetSyncDescription()` para incluir "clientes"
+### Solucao
 
-**2. Novo modelo `ClientePayload`**
-- Criar `Models/ClientePayload.cs` com campos: event_id, source, customer_id_ext, name, cpf, cnpj, email, phone, status, checksum
-- Reutilizar a estrutura de `CustomerData` já existente, mas com checksum próprio
+Adicionar uma **policy de SELECT para `anon`** na tabela `sync_logs`, permitindo leitura publica (os dados sao apenas logs de sincronizacao, sem informacao sensivel):
 
-**3. Novo método no DatabaseService: `GetCustomersAsync`**
-- Query SQL na tabela CLIENTES do Firebird: `SELECT CODCLI, NOMECLI, CPF, CNPJ, EMAIL, TELEFONE FROM CLIENTES`
-- Com suporte a paginação (limit/offset), checksum para evitar reenvio, e filtro opcional por data
-
-**4. Novo endpoint no ProjectApiService: `SendCustomerAsync`**
-- POST para `/cliente-sync` (ou nome equivalente que o novo projeto terá)
-
-**5. Orquestração no SyncService**
-- Adicionar `SyncCustomersForProjectAsync` seguindo o mesmo padrão de paginação dos outros tipos
-- Chamá-lo em `SyncForProjectAsync` quando `project.SyncCustomers == true`
-
-**6. Configuração no appsettings.json**
-- Adicionar entrada para "Flex Ambiental" quando o projeto for criado:
-```json
-{
-  "Name": "FlexAmbiental",
-  "BaseUrl": "https://<projeto>.supabase.co/functions/v1",
-  "ApiKey": "<anon-key>",
-  "SyncInvoices": false,
-  "SyncPayments": false,
-  "SyncReceivables": false,
-  "SyncCustomers": true
-}
+```sql
+CREATE POLICY "Allow anon to read sync logs"
+ON public.sync_logs
+FOR SELECT
+TO anon
+USING (true);
 ```
 
-### Pré-requisito
+### Resultado esperado
 
-O projeto **Flex Ambiental** precisa ser criado primeiro no Lovable para que tenhamos:
-- A URL base (BaseUrl) das edge functions
-- A anon key (ApiKey)
-- Uma edge function `/cliente-sync` para receber os dados
+Apos aplicar a policy:
+- O integrador carrega os ~5000+ checksums existentes
+- Compara com os dados do ERP
+- Envia **apenas registros novos ou alterados** (provavelmente <50 por execucao)
+- Tempo de execucao cai de ~1h30 para **poucos minutos**
+- Logs ficam concisos e uteis
 
-### Próximos passos sugeridos
+### Verificacao adicional
 
-1. **Criar o projeto Flex Ambiental** no Lovable
-2. Nele, criar a tabela `customers` e a edge function `/cliente-sync`
-3. Voltar aqui para implementar as mudanças no integrador (itens 1-6 acima)
-
-Quer que eu já implemente os itens 1-5 no integrador (preparando tudo para quando o projeto estiver pronto)?
+A tabela `integrator_executions` pode ter o mesmo problema de RLS. Verificarei e corrigirei junto.
 
