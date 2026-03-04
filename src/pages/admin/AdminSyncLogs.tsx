@@ -40,6 +40,7 @@ interface IntegratorExecution {
   error_count: number;
   invoice_count: number;
   payment_count: number;
+  project_name: string | null;
   logs?: SyncLog[];
 }
 
@@ -50,8 +51,15 @@ type DateRange = {
 
 type PresetFilter = "today" | "yesterday" | "this_week" | "custom";
 
+const PROJECT_COLORS: Record<string, string> = {
+  ClubeFlex: "bg-[#ff914d] text-white hover:bg-[#ff914d]/90",
+  Financeiro: "bg-[#18375d] text-white hover:bg-[#18375d]/90",
+  FlexAmbiental: "bg-emerald-600 text-white hover:bg-emerald-700",
+};
+
 const AdminSyncLogs = () => {
   const [selectedLog, setSelectedLog] = useState<SyncLog | null>(null);
+  const [projectFilter, setProjectFilter] = useState<string | null>(null);
   const today = new Date();
 
   const [presetFilter, setPresetFilter] = useState<PresetFilter>("today");
@@ -260,6 +268,29 @@ const AdminSyncLogs = () => {
         </div>
       </div>
 
+      {/* Project Filters */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground mr-1">Projeto:</span>
+        <Button
+          variant={projectFilter === null ? "default" : "outline"}
+          size="sm"
+          onClick={() => setProjectFilter(null)}
+        >
+          Todos
+        </Button>
+        {Object.keys(PROJECT_COLORS).map((name) => (
+          <Button
+            key={name}
+            variant={projectFilter === name ? "default" : "outline"}
+            size="sm"
+            onClick={() => setProjectFilter(name)}
+            className={projectFilter === name ? PROJECT_COLORS[name] : ""}
+          >
+            {name}
+          </Button>
+        ))}
+      </div>
+
       {/* Period Display */}
       <p className="text-sm text-muted-foreground">
         Exibindo logs de {format(dateRange.from, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })} até {format(dateRange.to, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -275,138 +306,152 @@ const AdminSyncLogs = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {!executions || executions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Nenhuma execução do integrador encontrada no período selecionado.</p>
-              <p className="text-sm mt-2">O integrador C# precisa ser atualizado para registrar execuções.</p>
-            </div>
-          ) : (
-            <Accordion type="single" collapsible className="space-y-4">
-              {executions.map((execution, index) => {
-                const hasErrors = execution.error_count > 0;
-                const execStatus = executionStatusMap[execution.status as keyof typeof executionStatusMap] || executionStatusMap.completed;
+          {(() => {
+            const filteredExecutions = projectFilter
+              ? (executions || []).filter(e => (e.project_name || 'ClubeFlex') === projectFilter)
+              : executions;
+            
+            if (!filteredExecutions || filteredExecutions.length === 0) {
+              return (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Nenhuma execução do integrador encontrada no período selecionado.</p>
+                </div>
+              );
+            }
 
-                return (
-                  <AccordionItem 
-                    key={execution.id} 
-                    value={`execution-${index}`}
-                    className="border rounded-lg px-4 bg-card"
-                  >
-                    <AccordionTrigger className="hover:no-underline py-4">
-                      <div className="flex items-center justify-between w-full pr-4">
-                        <div className="flex items-center gap-4">
-                          <div className="text-left">
-                            <div className="font-semibold text-base">
-                              {format(new Date(execution.started_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                            </div>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {execution.invoice_count > 0 && (
-                                <span className="inline-flex items-center gap-1 mr-3">
-                                  <FileText className="h-3 w-3" />
-                                  {execution.invoice_count} {execution.invoice_count === 1 ? 'fatura' : 'faturas'}
-                                </span>
-                              )}
-                              {execution.payment_count > 0 && (
-                                <span className="inline-flex items-center gap-1">
-                                  <DollarSign className="h-3 w-3" />
-                                  {execution.payment_count} {execution.payment_count === 1 ? 'pagamento' : 'pagamentos'}
-                                </span>
-                              )}
-                              {execution.total_events === 0 && (
-                                <span className="text-muted-foreground">Sem eventos</span>
-                              )}
+            return (
+              <Accordion type="single" collapsible className="space-y-4">
+                {filteredExecutions.map((execution, index) => {
+                  const hasErrors = execution.error_count > 0;
+                  const execStatus = executionStatusMap[execution.status as keyof typeof executionStatusMap] || executionStatusMap.completed;
+                  const projName = execution.project_name || 'ClubeFlex';
+                  const projColor = PROJECT_COLORS[projName] || "bg-muted text-muted-foreground";
+
+                  return (
+                    <AccordionItem 
+                      key={execution.id} 
+                      value={`execution-${index}`}
+                      className="border rounded-lg px-4 bg-card"
+                    >
+                      <AccordionTrigger className="hover:no-underline py-4">
+                        <div className="flex items-center justify-between w-full pr-4">
+                          <div className="flex items-center gap-3">
+                            <Badge className={cn("text-xs", projColor)}>
+                              {projName}
+                            </Badge>
+                            <div className="text-left">
+                              <div className="font-semibold text-base">
+                                {format(new Date(execution.started_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                              </div>
+                              <div className="text-sm text-muted-foreground mt-1">
+                                {execution.invoice_count > 0 && (
+                                  <span className="inline-flex items-center gap-1 mr-3">
+                                    <FileText className="h-3 w-3" />
+                                    {execution.invoice_count} {execution.invoice_count === 1 ? 'fatura' : 'faturas'}
+                                  </span>
+                                )}
+                                {execution.payment_count > 0 && (
+                                  <span className="inline-flex items-center gap-1">
+                                    <DollarSign className="h-3 w-3" />
+                                    {execution.payment_count} {execution.payment_count === 1 ? 'pagamento' : 'pagamentos'}
+                                  </span>
+                                )}
+                                {execution.total_events === 0 && (
+                                  <span className="text-muted-foreground">Sem eventos</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Badge variant={execStatus.variant} className={execStatus.className}>
-                            {execStatus.label}
-                          </Badge>
-                          {execution.success_count > 0 && (
-                            <Badge variant="default" className="bg-green-500 hover:bg-green-600">
-                              {execution.success_count} {execution.success_count === 1 ? 'sucesso' : 'sucessos'}
+                          
+                          <div className="flex items-center gap-2">
+                            <Badge variant={execStatus.variant} className={execStatus.className}>
+                              {execStatus.label}
                             </Badge>
-                          )}
-                          {hasErrors && (
-                            <Badge variant="destructive">
-                              {execution.error_count} {execution.error_count === 1 ? 'erro' : 'erros'}
+                            {execution.success_count > 0 && (
+                              <Badge variant="default" className="bg-green-500 hover:bg-green-600">
+                                {execution.success_count} {execution.success_count === 1 ? 'sucesso' : 'sucessos'}
+                              </Badge>
+                            )}
+                            {hasErrors && (
+                              <Badge variant="destructive">
+                                {execution.error_count} {execution.error_count === 1 ? 'erro' : 'erros'}
+                              </Badge>
+                            )}
+                            <Badge variant="outline" className="ml-2">
+                              {execution.total_events} {execution.total_events === 1 ? 'evento' : 'eventos'}
                             </Badge>
-                          )}
-                          <Badge variant="outline" className="ml-2">
-                            {execution.total_events} {execution.total_events === 1 ? 'evento' : 'eventos'}
-                          </Badge>
+                          </div>
                         </div>
-                      </div>
-                    </AccordionTrigger>
-                    
-                    <AccordionContent className="pb-4 pt-2">
-                      {execution.logs && execution.logs.length > 0 ? (
-                        <div className="border rounded-md">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="w-[140px]">Event ID</TableHead>
-                                <TableHead>Tipo</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="w-[100px]">Tentativas</TableHead>
-                                <TableHead>Horário</TableHead>
-                                <TableHead className="text-right">Ações</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {execution.logs.map((log) => {
-                                const status = statusMap[log.status as keyof typeof statusMap];
-                                const eventType = eventTypeMap[log.event_type as keyof typeof eventTypeMap];
-                                const EventIcon = eventType?.icon;
+                      </AccordionTrigger>
+                      
+                      <AccordionContent className="pb-4 pt-2">
+                        {execution.logs && execution.logs.length > 0 ? (
+                          <div className="border rounded-md">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="w-[140px]">Event ID</TableHead>
+                                  <TableHead>Tipo</TableHead>
+                                  <TableHead>Status</TableHead>
+                                  <TableHead className="w-[100px]">Tentativas</TableHead>
+                                  <TableHead>Horário</TableHead>
+                                  <TableHead className="text-right">Ações</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {execution.logs.map((log) => {
+                                  const status = statusMap[log.status as keyof typeof statusMap];
+                                  const eventType = eventTypeMap[log.event_type as keyof typeof eventTypeMap];
+                                  const EventIcon = eventType?.icon;
 
-                                return (
-                                  <TableRow key={log.id}>
-                                    <TableCell className="font-mono text-xs">{log.event_id}</TableCell>
-                                    <TableCell>
-                                      <div className="flex items-center gap-2">
-                                        {EventIcon && <EventIcon className="h-4 w-4 text-muted-foreground" />}
-                                        <span className="font-medium">
-                                          {eventType?.label || log.event_type}
-                                        </span>
-                                      </div>
-                                    </TableCell>
-                                    <TableCell>
-                                      <Badge variant={status?.variant || "secondary"} className={status?.className || ""}>
-                                        {status?.label || log.status}
-                                      </Badge>
-                                    </TableCell>
-                                    <TableCell>{log.attempts}</TableCell>
-                                    <TableCell className="text-sm">
-                                      {format(new Date(log.created_at), "HH:mm:ss", { locale: ptBR })}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setSelectedLog(log)}
-                                      >
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        Ver JSON
-                                      </Button>
-                                    </TableCell>
-                                  </TableRow>
-                                );
-                              })}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 text-muted-foreground">
-                          <p>Nenhum log vinculado a esta execução.</p>
-                        </div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                );
-              })}
-            </Accordion>
-          )}
+                                  return (
+                                    <TableRow key={log.id}>
+                                      <TableCell className="font-mono text-xs">{log.event_id}</TableCell>
+                                      <TableCell>
+                                        <div className="flex items-center gap-2">
+                                          {EventIcon && <EventIcon className="h-4 w-4 text-muted-foreground" />}
+                                          <span className="font-medium">
+                                            {eventType?.label || log.event_type}
+                                          </span>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge variant={status?.variant || "secondary"} className={status?.className || ""}>
+                                          {status?.label || log.status}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>{log.attempts}</TableCell>
+                                      <TableCell className="text-sm">
+                                        {format(new Date(log.created_at), "HH:mm:ss", { locale: ptBR })}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => setSelectedLog(log)}
+                                        >
+                                          <Eye className="h-4 w-4 mr-2" />
+                                          Ver JSON
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-4 text-muted-foreground">
+                            <p>Nenhum log vinculado a esta execução.</p>
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
+            );
+          })()}
         </CardContent>
       </Card>
 

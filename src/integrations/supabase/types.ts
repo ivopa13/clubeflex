@@ -110,6 +110,7 @@ export type Database = {
           id: string
           invoice_count: number
           payment_count: number
+          project_name: string | null
           started_at: string
           status: string
           success_count: number
@@ -124,6 +125,7 @@ export type Database = {
           id?: string
           invoice_count?: number
           payment_count?: number
+          project_name?: string | null
           started_at?: string
           status?: string
           success_count?: number
@@ -138,6 +140,7 @@ export type Database = {
           id?: string
           invoice_count?: number
           payment_count?: number
+          project_name?: string | null
           started_at?: string
           status?: string
           success_count?: number
