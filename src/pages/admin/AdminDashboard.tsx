@@ -45,6 +45,10 @@ const AdminDashboard = () => {
     canceled: { label: "Cancelada", variant: "destructive" as const, className: "" },
   };
 
+  const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtPts = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  const pv = stats?.pointMonetaryValue ?? 0.02;
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Dashboard</h1>
@@ -57,8 +61,11 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-pending">
-              {stats?.totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
+              {fmtPts(stats?.totalPending ?? 0)} pontos
             </div>
+            <p className="text-sm font-medium text-muted-foreground mt-1">
+              ≈ R$ {fmt((stats?.totalPending ?? 0) * pv)}
+            </p>
             <p className="text-xs text-muted-foreground">Total aguardando liberação</p>
           </CardContent>
         </Card>
@@ -70,8 +77,11 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-redeemable">
-              {stats?.totalRedeemable.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
+              {fmtPts(stats?.totalRedeemable ?? 0)} pontos
             </div>
+            <p className="text-sm font-medium text-muted-foreground mt-1">
+              ≈ R$ {fmt((stats?.totalRedeemable ?? 0) * pv)}
+            </p>
             <p className="text-xs text-muted-foreground">Disponíveis para resgate</p>
           </CardContent>
         </Card>
@@ -83,8 +93,11 @@ const AdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-redeemed">
-              {stats?.totalRedeemedThisMonth.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} pontos
+              {fmtPts(stats?.totalRedeemedThisMonth ?? 0)} pontos
             </div>
+            <p className="text-sm font-medium text-muted-foreground mt-1">
+              ≈ R$ {fmt((stats?.totalRedeemedThisMonth ?? 0) * pv)}
+            </p>
             <p className="text-xs text-muted-foreground">Total de resgates do mês</p>
           </CardContent>
         </Card>
