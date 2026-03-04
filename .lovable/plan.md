@@ -1,39 +1,40 @@
 
 
-## Diagnostico: Por que o integrador re-sincroniza tudo toda vez
+## Plano: Exibir nome do projeto em cada execucao nos logs
 
-### Causa raiz
+### Situacao atual
 
-A tabela `sync_logs` tem **RLS (Row Level Security)** ativo com apenas uma policy de SELECT que exige `has_role(auth.uid(), 'admin')`. O integrador C# usa a **anon key** (sem autenticacao), entao quando tenta carregar os checksums existentes via PostgREST (`/rest/v1/sync_logs?...`), recebe **zero resultados**. Resultado: o integrador acha que nenhum registro foi sincronizado antes e re-envia tudo.
+A tabela `integrator_executions` nao tem coluna `project_name`. Porem, o `execution_id` ja contem o nome do projeto no formato `EXEC_ClubeFlex_20260304_HHmmss_xxxx`. Temos duas opcoes:
 
-Numeros do problema:
-- 5193 faturas no sync_logs, mas o integrador nao ve nenhuma
-- ~2500 faturas + ~950 pagamentos re-enviados a cada execucao (~3400 eventos)
-- 83.543 linhas de log em um unico dia (5+ execucoes)
-- Cada execucao leva ~1h30 quando deveria levar segundos (apenas novos registros)
+1. **Extrair do execution_id no frontend** (rapido, sem mudanca no backend)
+2. **Adicionar coluna `project_name`** (mais robusto, permite filtros e queries)
 
-### Solucao
+Recomendo a **opcao 2** por ser mais limpa e permitir filtros futuros.
 
-Adicionar uma **policy de SELECT para `anon`** na tabela `sync_logs`, permitindo leitura publica (os dados sao apenas logs de sincronizacao, sem informacao sensivel):
+### Alteracoes
 
+**1. Database** -- adicionar coluna `project_name` na tabela `integrator_executions`
 ```sql
-CREATE POLICY "Allow anon to read sync logs"
-ON public.sync_logs
-FOR SELECT
-TO anon
-USING (true);
+ALTER TABLE public.integrator_executions 
+ADD COLUMN project_name text DEFAULT 'ClubeFlex';
+-- Preencher dados existentes extraindo do execution_id
+UPDATE public.integrator_executions 
+SET project_name = split_part(execution_id, '_', 2)
+WHERE execution_id LIKE 'EXEC_%';
 ```
 
-### Resultado esperado
+**2. Edge function `integrator-execution`** -- receber e salvar `project_name` no `start`
+- Aceitar campo `project_name` no body
+- Inserir na tabela junto com os demais campos
 
-Apos aplicar a policy:
-- O integrador carrega os ~5000+ checksums existentes
-- Compara com os dados do ERP
-- Envia **apenas registros novos ou alterados** (provavelmente <50 por execucao)
-- Tempo de execucao cai de ~1h30 para **poucos minutos**
-- Logs ficam concisos e uteis
+**3. Integrador C# `ProjectSyncLogService.cs`** -- enviar `project_name` no payload de start
+- Adicionar `project_name = _projectName` no objeto enviado ao endpoint
 
-### Verificacao adicional
+**4. Frontend `AdminSyncLogs.tsx`** -- agrupar ou indicar projeto
+- Exibir badge com nome do projeto em cada execucao no accordion
+- Adicionar filtro por projeto (botoes como os de data)
 
-A tabela `integrator_executions` pode ter o mesmo problema de RLS. Verificarei e corrigirei junto.
+### UI esperada
+
+Cada item do accordion mostrara um badge colorido (ex: "ClubeFlex" em laranja, "Financeiro" em azul) ao lado da data/hora. Filtros por projeto aparecerao abaixo dos filtros de data.
 
