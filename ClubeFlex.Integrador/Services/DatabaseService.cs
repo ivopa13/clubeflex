@@ -1095,12 +1095,9 @@ public class DatabaseService
                 c.EMAIL as customer_email,
                 c.TELEFONE as customer_phone,
                 c.ENDERECO as customer_street,
-                c.NUMERO as customer_number,
-                c.COMPLEMENTO as customer_complement,
                 c.BAIRRO as customer_neighborhood,
                 c.CIDADE as customer_city,
-                c.UF as customer_state,
-                c.CEP as customer_zip
+                c.ESTADO as customer_state
             FROM CLIENTE c
             WHERE c.CODCLI <> 3005
             ORDER BY c.CODCLI ASC";
@@ -1145,12 +1142,6 @@ public class DatabaseService
                     Street = reader.IsDBNull(reader.GetOrdinal("customer_street"))
                         ? null
                         : reader["customer_street"].ToString()?.Trim(),
-                    Number = reader.IsDBNull(reader.GetOrdinal("customer_number"))
-                        ? null
-                        : reader["customer_number"].ToString()?.Trim(),
-                    Complement = reader.IsDBNull(reader.GetOrdinal("customer_complement"))
-                        ? null
-                        : reader["customer_complement"].ToString()?.Trim(),
                     Neighborhood = reader.IsDBNull(reader.GetOrdinal("customer_neighborhood"))
                         ? null
                         : reader["customer_neighborhood"].ToString()?.Trim(),
@@ -1159,10 +1150,7 @@ public class DatabaseService
                         : reader["customer_city"].ToString()?.Trim(),
                     State = reader.IsDBNull(reader.GetOrdinal("customer_state"))
                         ? null
-                        : reader["customer_state"].ToString()?.Trim(),
-                    ZipCode = reader.IsDBNull(reader.GetOrdinal("customer_zip"))
-                        ? null
-                        : reader["customer_zip"].ToString()?.Trim()
+                        : reader["customer_state"].ToString()?.Trim()
                 };
 
                 payload.CalculateChecksum();
