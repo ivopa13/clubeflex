@@ -1095,6 +1095,8 @@ public class DatabaseService
                 c.EMAIL as customer_email,
                 c.TELEFONE as customer_phone,
                 c.ENDERECO as customer_street,
+                c.NUMEROLOGRADOURO as customer_number,
+                c.COMPLEMENTOLOGRADOURO as customer_complement,
                 c.BAIRRO as customer_neighborhood,
                 c.CIDADE as customer_city,
                 c.ESTADO as customer_state,
