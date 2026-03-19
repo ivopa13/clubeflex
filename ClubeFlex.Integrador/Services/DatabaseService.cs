@@ -1145,6 +1145,12 @@ public class DatabaseService
                     Street = reader.IsDBNull(reader.GetOrdinal("customer_street"))
                         ? null
                         : reader["customer_street"].ToString()?.Trim(),
+                    Number = reader.IsDBNull(reader.GetOrdinal("customer_number"))
+                        ? null
+                        : reader["customer_number"].ToString()?.Trim(),
+                    Complement = reader.IsDBNull(reader.GetOrdinal("customer_complement"))
+                        ? null
+                        : reader["customer_complement"].ToString()?.Trim(),
                     Neighborhood = reader.IsDBNull(reader.GetOrdinal("customer_neighborhood"))
                         ? null
                         : reader["customer_neighborhood"].ToString()?.Trim(),
