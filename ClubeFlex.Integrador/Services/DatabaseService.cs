@@ -1095,6 +1095,8 @@ public class DatabaseService
                 c.EMAIL as customer_email,
                 c.TELEFONE as customer_phone,
                 c.ENDERECO as customer_street,
+                c.NUMEROLOGRADOURO as customer_number,
+                c.COMPLEMENTOLOGRADOURO as customer_complement,
                 c.BAIRRO as customer_neighborhood,
                 c.CIDADE as customer_city,
                 c.ESTADO as customer_state,
@@ -1143,6 +1145,12 @@ public class DatabaseService
                     Street = reader.IsDBNull(reader.GetOrdinal("customer_street"))
                         ? null
                         : reader["customer_street"].ToString()?.Trim(),
+                    Number = reader.IsDBNull(reader.GetOrdinal("customer_number"))
+                        ? null
+                        : reader["customer_number"].ToString()?.Trim(),
+                    Complement = reader.IsDBNull(reader.GetOrdinal("customer_complement"))
+                        ? null
+                        : reader["customer_complement"].ToString()?.Trim(),
                     Neighborhood = reader.IsDBNull(reader.GetOrdinal("customer_neighborhood"))
                         ? null
                         : reader["customer_neighborhood"].ToString()?.Trim(),
