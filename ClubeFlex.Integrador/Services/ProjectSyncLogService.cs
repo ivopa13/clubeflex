@@ -17,9 +17,9 @@ public class ProjectSyncLogService
     private readonly string _projectName;
     private string? _currentExecutionId;
 
-    public ProjectSyncLogService(ProjectConfig config)
+    public ProjectSyncLogService(ProjectConfig config, string? overrideProjectName = null)
     {
-        _projectName = config.Name;
+        _projectName = overrideProjectName ?? config.Name;
         _httpClient = new HttpClient();
         
         // Separar URLs para Edge Functions e PostgREST
