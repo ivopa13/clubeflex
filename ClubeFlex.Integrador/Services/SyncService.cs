@@ -120,6 +120,14 @@ public class SyncService
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Retorna o projeto ClubeFlex (projeto principal) para centralização de logs
+    /// </summary>
+    private ProjectConfig? GetMainProject()
+    {
+        return _projects.FirstOrDefault(p => p.Name == "ClubeFlex" && p.IsValid());
+    }
+
     private async Task SyncForProjectAsync(ProjectConfig project)
     {
         Log.Information($"[{project.Name}] === Iniciando sincronização ===");
@@ -127,7 +135,17 @@ public class SyncService
         var apiService = new ProjectApiService(project);
         var syncLogService = new ProjectSyncLogService(project);
 
+        // Para projetos secundários, criar também um log centralizado no projeto principal
+        ProjectSyncLogService? centralLogService = null;
+        var mainProject = GetMainProject();
+        if (mainProject != null && project.Name != "ClubeFlex")
+        {
+            centralLogService = new ProjectSyncLogService(mainProject, project.Name);
+        }
+
         await syncLogService.StartExecutionAsync();
+        if (centralLogService != null)
+            await centralLogService.StartExecutionAsync();
 
         var counters = new SyncCounters();
 
@@ -156,6 +174,8 @@ public class SyncService
             var status = counters.ErrorCount > 0 ? "completed_with_errors" : "completed";
             var total = counters.InvoiceCount + counters.PaymentCount + counters.CustomerCount;
             await syncLogService.FinishExecutionAsync(status, total, counters.SuccessCount, counters.ErrorCount, counters.InvoiceCount, counters.PaymentCount);
+            if (centralLogService != null)
+                await centralLogService.FinishExecutionAsync(status, total, counters.SuccessCount, counters.ErrorCount, counters.InvoiceCount, counters.PaymentCount);
         }
     }
 
