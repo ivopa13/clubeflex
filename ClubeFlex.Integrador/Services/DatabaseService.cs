@@ -1162,7 +1162,7 @@ public class DatabaseService
                 // Comparar com checksum existente
                 if (existingChecksums != null && existingChecksums.TryGetValue(eventId, out var existingChecksum))
                 {
-                    if (existingChecksum == "__no_checksum__" || existingChecksum == payload.Checksum)
+                    if (existingChecksum == payload.Checksum)
                     {
                         Log.Debug($"⏭️ Cliente {customerId} sem alterações (checksum igual)");
                         skippedByChecksum++;
