@@ -555,10 +555,17 @@ public class SyncService
                 var offset = (batchNumber - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de clientes (offset {offset})...");
 
-                var customers = await _databaseService.GetCustomersAsync(limit, existingChecksums, offset);
+                var customerBatch = await _databaseService.GetCustomersAsync(limit, existingChecksums, offset);
+                var customers = customerBatch.Customers;
 
                 if (customers.Count == 0)
                 {
+                    if (customerBatch.HasMoreRows && !_testMode)
+                    {
+                        Log.Information($"[{project.Name}] Lote {batchNumber} sem alterações. Avançando para o próximo lote...");
+                        continue;
+                    }
+
                     Log.Information(batchNumber == 1
                         ? $"[{project.Name}] Nenhum cliente novo ou alterado"
                         : $"[{project.Name}] Clientes: {batchNumber - 1} lotes processados");
@@ -588,7 +595,7 @@ public class SyncService
                     else { counters.ErrorCount++; totalErrors++; }
                 }
 
-                if (customers.Count < limit || _testMode) break;
+                if (!customerBatch.HasMoreRows || _testMode) break;
             }
 
             if (totalCustomers > 0)
