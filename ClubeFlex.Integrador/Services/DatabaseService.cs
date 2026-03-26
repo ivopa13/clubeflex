@@ -20,6 +20,14 @@ public class DatabaseService
 {
     private readonly string _connectionString;
 
+    public class CustomerBatchResult
+    {
+        public List<ClientePayload> Customers { get; set; } = new();
+        public int RawRowsRead { get; set; }
+        public int SkippedByChecksum { get; set; }
+        public bool HasMoreRows { get; set; }
+    }
+
     public DatabaseService(string connectionString)
     {
         _connectionString = connectionString;
@@ -1081,9 +1089,9 @@ public class DatabaseService
     /// Busca clientes da tabela CLIENTE do Firebird para sincronização dedicada
     /// Usa checksum para evitar reenvio de dados não alterados
     /// </summary>
-    public async Task<List<ClientePayload>> GetCustomersAsync(int? limit = null, Dictionary<string, string>? existingChecksums = null, int offset = 0)
+    public async Task<CustomerBatchResult> GetCustomersAsync(int? limit = null, Dictionary<string, string>? existingChecksums = null, int offset = 0)
     {
-        var customers = new List<ClientePayload>();
+        var result = new CustomerBatchResult();
         var batchSize = limit ?? 500;
 
         var query = $@"
@@ -1106,6 +1114,7 @@ public class DatabaseService
             ORDER BY c.CODCLI ASC";
 
         int skippedByChecksum = 0;
+        int rawRowsRead = 0;
 
         try
         {
@@ -1117,6 +1126,7 @@ public class DatabaseService
 
             while (await reader.ReadAsync())
             {
+                rawRowsRead++;
                 var customerId = reader["customer_id"].ToString() ?? "";
                 var eventId = $"CLI_{customerId}";
 
@@ -1182,10 +1192,14 @@ public class DatabaseService
                     }
                 }
 
-                customers.Add(payload);
+                result.Customers.Add(payload);
             }
 
-            Log.Information($"📋 Encontrados {customers.Count} clientes novos/alterados para sincronizar");
+            result.RawRowsRead = rawRowsRead;
+            result.SkippedByChecksum = skippedByChecksum;
+            result.HasMoreRows = rawRowsRead >= batchSize;
+
+            Log.Information($"📋 Encontrados {result.Customers.Count} clientes novos/alterados para sincronizar");
 
             if (skippedByChecksum > 0)
                 Log.Information($"⏭️ {skippedByChecksum} clientes pulados (sem alterações - checksum igual)");
@@ -1196,6 +1210,6 @@ public class DatabaseService
             throw;
         }
 
-        return customers;
+        return result;
     }
 }
