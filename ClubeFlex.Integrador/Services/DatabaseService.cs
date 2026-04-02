@@ -20,13 +20,16 @@ public class DatabaseService
 {
     private readonly string _connectionString;
 
-    public class CustomerBatchResult
+    public class BatchResult<T>
     {
-        public List<ClientePayload> Customers { get; set; } = new();
+        public List<T> Items { get; set; } = new();
         public int RawRowsRead { get; set; }
         public int SkippedByChecksum { get; set; }
         public bool HasMoreRows { get; set; }
     }
+
+    // Alias for backwards compatibility
+    public class CustomerBatchResult : BatchResult<ClientePayload> { }
 
     public DatabaseService(string connectionString)
     {
