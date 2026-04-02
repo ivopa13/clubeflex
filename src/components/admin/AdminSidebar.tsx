@@ -55,8 +55,8 @@ export const AdminSidebar = () => {
   return (
     <Sidebar style={{ backgroundColor: "#18375d" }}>
       <SidebarContent style={{ backgroundColor: "#18375d" }}>
-        <div className="bg-white p-[50px] flex items-center justify-center">
-          <img src={logoGrupoFlex} alt="Grupo Flex" className="w-full h-auto object-contain" />
+        <div className="bg-white px-4 py-3 flex items-center justify-center">
+          <img src={logoGrupoFlex} alt="Grupo Flex" className="w-full max-w-[180px] h-auto object-contain" />
         </div>
         <SidebarGroup>
           <SidebarGroupLabel className="text-white">Menu do Administrador</SidebarGroupLabel>
