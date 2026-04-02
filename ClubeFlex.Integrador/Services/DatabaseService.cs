@@ -917,20 +917,24 @@ public class DatabaseService
                     }
                 }
 
-                receivables.Add(payload);
+                batchResult.Items.Add(payload);
 
                 var overdueLabel = isOverdue ? $" ⚠️ VENCIDO há {daysOverdue} dias" : "";
                 Log.Debug($"Título encontrado: {eventId} - Valor: {amount:C} - Venc: {dueDate.Value:dd/MM/yyyy}{overdueLabel}");
             }
 
-            Log.Information($"📋 Encontrados {receivables.Count} títulos a receber para sincronizar");
+            batchResult.RawRowsRead = rawRowsRead;
+            batchResult.SkippedByChecksum = skippedByChecksum;
+            batchResult.HasMoreRows = rawRowsRead >= batchSize;
+
+            Log.Information($"📋 Encontrados {batchResult.Items.Count} títulos a receber para sincronizar (lidos: {rawRowsRead})");
             
             if (skippedByChecksum > 0)
             {
                 Log.Information($"⏭️ {skippedByChecksum} títulos pulados (sem alterações - checksum igual)");
             }
             
-            var overdueCount = receivables.Count(r => r.IsOverdue);
+            var overdueCount = batchResult.Items.Count(r => r.IsOverdue);
             if (overdueCount > 0)
             {
                 Log.Warning($"⚠️ {overdueCount} títulos estão vencidos!");
@@ -942,7 +946,7 @@ public class DatabaseService
             throw;
         }
 
-        return receivables;
+        return batchResult;
     }
 
     /// <summary>
