@@ -376,10 +376,17 @@ public class SyncService
                 var offset = (batchNumber - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de títulos (offset {offset})...");
 
-                var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset, fullFromDate);
+                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset, fullFromDate);
+                var receivables = receivableBatch.Items;
 
                 if (receivables.Count == 0)
                 {
+                    if (receivableBatch.HasMoreRows && !_testMode)
+                    {
+                        Log.Information($"[{project.Name}] Lote {batchNumber} sem alterações. Avançando para o próximo lote...");
+                        continue;
+                    }
+
                     Log.Information(batchNumber == 1
                         ? $"[{project.Name}] Nenhum título novo ou alterado"
                         : $"[{project.Name}] Títulos: {batchNumber - 1} lotes processados");
@@ -411,7 +418,7 @@ public class SyncService
                     else { counters.ErrorCount++; totalRecErrors++; }
                 }
 
-                if (receivables.Count < limit || _testMode) break;
+                if (!receivableBatch.HasMoreRows || _testMode) break;
             }
 
             if (totalReceivables > 0)
