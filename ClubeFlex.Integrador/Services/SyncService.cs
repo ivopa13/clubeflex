@@ -434,10 +434,17 @@ public class SyncService
                 var offset = (payBatch - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {payBatch} de pagamentos de títulos (offset {offset})...");
 
-                var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, ignoreFromDate, offset, fullFromDate);
+                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, ignoreFromDate, offset, fullFromDate);
+                var payments = payBatchResult.Items;
 
                 if (payments.Count == 0)
                 {
+                    if (payBatchResult.HasMoreRows && !_testMode)
+                    {
+                        Log.Information($"[{project.Name}] Lote {payBatch} de pagamentos sem alterações. Avançando...");
+                        continue;
+                    }
+
                     Log.Information(payBatch == 1
                         ? $"[{project.Name}] Nenhum pagamento de título novo"
                         : $"[{project.Name}] Pagamentos de títulos: {payBatch - 1} lotes processados");
@@ -469,7 +476,7 @@ public class SyncService
                     else { counters.ErrorCount++; totalPayErrors++; }
                 }
 
-                if (payments.Count < limit || _testMode) break;
+                if (!payBatchResult.HasMoreRows || _testMode) break;
             }
 
             if (totalPayments > 0)
