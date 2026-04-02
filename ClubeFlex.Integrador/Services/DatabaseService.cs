@@ -1057,11 +1057,15 @@ public class DatabaseService
                     }
                 }
 
-                payments.Add(payload);
+                batchResult.Items.Add(payload);
                 Log.Debug($"Pagamento de título encontrado: {eventId} - Valor: {payload.PaidAmount} - Data: {paidAt.Value:yyyy-MM-dd}");
             }
 
-            Log.Information($"📋 Encontrados {payments.Count} pagamentos de títulos novos/alterados para sincronizar");
+            batchResult.RawRowsRead = rawRowsRead;
+            batchResult.SkippedByChecksum = skippedByChecksum;
+            batchResult.HasMoreRows = rawRowsRead >= batchSize;
+
+            Log.Information($"📋 Encontrados {batchResult.Items.Count} pagamentos de títulos novos/alterados (lidos: {rawRowsRead})");
             
             if (skippedByChecksum > 0)
             {
@@ -1074,7 +1078,7 @@ public class DatabaseService
             throw;
         }
 
-        return payments;
+        return batchResult;
     }
 
     /// <summary>
