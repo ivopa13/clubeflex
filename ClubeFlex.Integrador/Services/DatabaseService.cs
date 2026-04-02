@@ -733,9 +733,9 @@ public class DatabaseService
     /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
     /// <param name="existingChecksums">Checksums existentes para comparar e evitar reenvio de dados inalterados</param>
     /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
-    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
+    public async Task<BatchResult<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
     {
-        var receivables = new List<TituloPayload>();
+        var batchResult = new BatchResult<TituloPayload>();
 
         var batchSize = limit ?? 500;
         
