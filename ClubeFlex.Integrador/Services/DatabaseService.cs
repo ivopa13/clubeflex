@@ -1195,14 +1195,14 @@ public class DatabaseService
                     }
                 }
 
-                result.Customers.Add(payload);
+                result.Items.Add(payload);
             }
 
             result.RawRowsRead = rawRowsRead;
             result.SkippedByChecksum = skippedByChecksum;
             result.HasMoreRows = rawRowsRead >= batchSize;
 
-            Log.Information($"📋 Encontrados {result.Customers.Count} clientes novos/alterados para sincronizar");
+            Log.Information($"📋 Encontrados {result.Items.Count} clientes novos/alterados para sincronizar");
 
             if (skippedByChecksum > 0)
                 Log.Information($"⏭️ {skippedByChecksum} clientes pulados (sem alterações - checksum igual)");

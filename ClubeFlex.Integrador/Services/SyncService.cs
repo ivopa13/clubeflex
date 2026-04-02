@@ -556,7 +556,7 @@ public class SyncService
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de clientes (offset {offset})...");
 
                 var customerBatch = await _databaseService.GetCustomersAsync(limit, existingChecksums, offset);
-                var customers = customerBatch.Customers;
+                var customers = customerBatch.Items;
 
                 if (customers.Count == 0)
                 {
