@@ -1008,6 +1008,7 @@ public class DatabaseService
             ORDER BY crr.DATA DESC, crr.ID DESC";
 
         int skippedByChecksum = 0;
+        int rawRowsRead = 0;
 
         try
         {
@@ -1019,6 +1020,7 @@ public class DatabaseService
 
             while (await reader.ReadAsync())
             {
+                rawRowsRead++;
                 var paymentId = reader["payment_id"].ToString() ?? "";
                 var receivableId = reader["receivable_id"].ToString() ?? "";
                 var eventId = $"TPAG_{receivableId}_{paymentId}";
