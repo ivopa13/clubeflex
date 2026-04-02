@@ -20,13 +20,16 @@ public class DatabaseService
 {
     private readonly string _connectionString;
 
-    public class CustomerBatchResult
+    public class BatchResult<T>
     {
-        public List<ClientePayload> Customers { get; set; } = new();
+        public List<T> Items { get; set; } = new();
         public int RawRowsRead { get; set; }
         public int SkippedByChecksum { get; set; }
         public bool HasMoreRows { get; set; }
     }
+
+    // Alias for backwards compatibility
+    public class CustomerBatchResult : BatchResult<ClientePayload> { }
 
     public DatabaseService(string connectionString)
     {
@@ -730,9 +733,9 @@ public class DatabaseService
     /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
     /// <param name="existingChecksums">Checksums existentes para comparar e evitar reenvio de dados inalterados</param>
     /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
-    public async Task<List<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
+    public async Task<BatchResult<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
     {
-        var receivables = new List<TituloPayload>();
+        var batchResult = new BatchResult<TituloPayload>();
 
         var batchSize = limit ?? 500;
         
@@ -792,6 +795,7 @@ public class DatabaseService
             ORDER BY cr.DATVENC ASC, cr.CODCR ASC";
 
         int skippedByChecksum = 0;
+        int rawRowsRead = 0;
 
         try
         {
@@ -803,6 +807,7 @@ public class DatabaseService
 
             while (await reader.ReadAsync())
             {
+                rawRowsRead++;
                 var receivableId = reader["receivable_id"].ToString() ?? "";
                 var eventId = $"TIT_{receivableId}";
 
@@ -912,20 +917,24 @@ public class DatabaseService
                     }
                 }
 
-                receivables.Add(payload);
+                batchResult.Items.Add(payload);
 
                 var overdueLabel = isOverdue ? $" ⚠️ VENCIDO há {daysOverdue} dias" : "";
                 Log.Debug($"Título encontrado: {eventId} - Valor: {amount:C} - Venc: {dueDate.Value:dd/MM/yyyy}{overdueLabel}");
             }
 
-            Log.Information($"📋 Encontrados {receivables.Count} títulos a receber para sincronizar");
+            batchResult.RawRowsRead = rawRowsRead;
+            batchResult.SkippedByChecksum = skippedByChecksum;
+            batchResult.HasMoreRows = rawRowsRead >= batchSize;
+
+            Log.Information($"📋 Encontrados {batchResult.Items.Count} títulos a receber para sincronizar (lidos: {rawRowsRead})");
             
             if (skippedByChecksum > 0)
             {
                 Log.Information($"⏭️ {skippedByChecksum} títulos pulados (sem alterações - checksum igual)");
             }
             
-            var overdueCount = receivables.Count(r => r.IsOverdue);
+            var overdueCount = batchResult.Items.Count(r => r.IsOverdue);
             if (overdueCount > 0)
             {
                 Log.Warning($"⚠️ {overdueCount} títulos estão vencidos!");
@@ -937,16 +946,16 @@ public class DatabaseService
             throw;
         }
 
-        return receivables;
+        return batchResult;
     }
 
     /// <summary>
     /// Busca pagamentos de títulos a receber (CONTARECEBERREC) para sincronização
     /// Usado pelo sistema de cobranças (Financeiro)
     /// </summary>
-    public async Task<List<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
+    public async Task<BatchResult<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
     {
-        var payments = new List<TituloPagamentoPayload>();
+        var batchResult = new BatchResult<TituloPagamentoPayload>();
 
         var batchSize = limit ?? 500;
         
@@ -999,6 +1008,7 @@ public class DatabaseService
             ORDER BY crr.DATA DESC, crr.ID DESC";
 
         int skippedByChecksum = 0;
+        int rawRowsRead = 0;
 
         try
         {
@@ -1010,6 +1020,7 @@ public class DatabaseService
 
             while (await reader.ReadAsync())
             {
+                rawRowsRead++;
                 var paymentId = reader["payment_id"].ToString() ?? "";
                 var receivableId = reader["receivable_id"].ToString() ?? "";
                 var eventId = $"TPAG_{receivableId}_{paymentId}";
@@ -1046,11 +1057,15 @@ public class DatabaseService
                     }
                 }
 
-                payments.Add(payload);
+                batchResult.Items.Add(payload);
                 Log.Debug($"Pagamento de título encontrado: {eventId} - Valor: {payload.PaidAmount} - Data: {paidAt.Value:yyyy-MM-dd}");
             }
 
-            Log.Information($"📋 Encontrados {payments.Count} pagamentos de títulos novos/alterados para sincronizar");
+            batchResult.RawRowsRead = rawRowsRead;
+            batchResult.SkippedByChecksum = skippedByChecksum;
+            batchResult.HasMoreRows = rawRowsRead >= batchSize;
+
+            Log.Information($"📋 Encontrados {batchResult.Items.Count} pagamentos de títulos novos/alterados (lidos: {rawRowsRead})");
             
             if (skippedByChecksum > 0)
             {
@@ -1063,7 +1078,7 @@ public class DatabaseService
             throw;
         }
 
-        return payments;
+        return batchResult;
     }
 
     /// <summary>
@@ -1192,14 +1207,14 @@ public class DatabaseService
                     }
                 }
 
-                result.Customers.Add(payload);
+                result.Items.Add(payload);
             }
 
             result.RawRowsRead = rawRowsRead;
             result.SkippedByChecksum = skippedByChecksum;
             result.HasMoreRows = rawRowsRead >= batchSize;
 
-            Log.Information($"📋 Encontrados {result.Customers.Count} clientes novos/alterados para sincronizar");
+            Log.Information($"📋 Encontrados {result.Items.Count} clientes novos/alterados para sincronizar");
 
             if (skippedByChecksum > 0)
                 Log.Information($"⏭️ {skippedByChecksum} clientes pulados (sem alterações - checksum igual)");

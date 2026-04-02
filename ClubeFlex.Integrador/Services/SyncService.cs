@@ -376,10 +376,17 @@ public class SyncService
                 var offset = (batchNumber - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de títulos (offset {offset})...");
 
-                var receivables = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset, fullFromDate);
+                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset, fullFromDate);
+                var receivables = receivableBatch.Items;
 
                 if (receivables.Count == 0)
                 {
+                    if (receivableBatch.HasMoreRows && !_testMode)
+                    {
+                        Log.Information($"[{project.Name}] Lote {batchNumber} sem alterações. Avançando para o próximo lote...");
+                        continue;
+                    }
+
                     Log.Information(batchNumber == 1
                         ? $"[{project.Name}] Nenhum título novo ou alterado"
                         : $"[{project.Name}] Títulos: {batchNumber - 1} lotes processados");
@@ -411,7 +418,7 @@ public class SyncService
                     else { counters.ErrorCount++; totalRecErrors++; }
                 }
 
-                if (receivables.Count < limit || _testMode) break;
+                if (!receivableBatch.HasMoreRows || _testMode) break;
             }
 
             if (totalReceivables > 0)
@@ -427,10 +434,17 @@ public class SyncService
                 var offset = (payBatch - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {payBatch} de pagamentos de títulos (offset {offset})...");
 
-                var payments = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, ignoreFromDate, offset, fullFromDate);
+                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, ignoreFromDate, offset, fullFromDate);
+                var payments = payBatchResult.Items;
 
                 if (payments.Count == 0)
                 {
+                    if (payBatchResult.HasMoreRows && !_testMode)
+                    {
+                        Log.Information($"[{project.Name}] Lote {payBatch} de pagamentos sem alterações. Avançando...");
+                        continue;
+                    }
+
                     Log.Information(payBatch == 1
                         ? $"[{project.Name}] Nenhum pagamento de título novo"
                         : $"[{project.Name}] Pagamentos de títulos: {payBatch - 1} lotes processados");
@@ -462,7 +476,7 @@ public class SyncService
                     else { counters.ErrorCount++; totalPayErrors++; }
                 }
 
-                if (payments.Count < limit || _testMode) break;
+                if (!payBatchResult.HasMoreRows || _testMode) break;
             }
 
             if (totalPayments > 0)
@@ -556,7 +570,7 @@ public class SyncService
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de clientes (offset {offset})...");
 
                 var customerBatch = await _databaseService.GetCustomersAsync(limit, existingChecksums, offset);
-                var customers = customerBatch.Customers;
+                var customers = customerBatch.Items;
 
                 if (customers.Count == 0)
                 {
