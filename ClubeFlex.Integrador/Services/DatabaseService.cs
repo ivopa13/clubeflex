@@ -795,6 +795,7 @@ public class DatabaseService
             ORDER BY cr.DATVENC ASC, cr.CODCR ASC";
 
         int skippedByChecksum = 0;
+        int rawRowsRead = 0;
 
         try
         {
@@ -806,6 +807,7 @@ public class DatabaseService
 
             while (await reader.ReadAsync())
             {
+                rawRowsRead++;
                 var receivableId = reader["receivable_id"].ToString() ?? "";
                 var eventId = $"TIT_{receivableId}";
 
