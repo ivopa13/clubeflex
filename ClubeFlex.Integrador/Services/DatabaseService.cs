@@ -953,9 +953,9 @@ public class DatabaseService
     /// Busca pagamentos de títulos a receber (CONTARECEBERREC) para sincronização
     /// Usado pelo sistema de cobranças (Financeiro)
     /// </summary>
-    public async Task<List<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
+    public async Task<BatchResult<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
     {
-        var payments = new List<TituloPagamentoPayload>();
+        var batchResult = new BatchResult<TituloPagamentoPayload>();
 
         var batchSize = limit ?? 500;
         
