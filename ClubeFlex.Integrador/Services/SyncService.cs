@@ -351,9 +351,12 @@ public class SyncService
         ProjectApiService apiService,
         ProjectSyncLogService syncLogService,
         SyncCounters counters,
-        bool ignoreFromDate = false)
+        bool ignoreFromDate = false,
+        bool backfillMode = false)
     {
         Log.Information($"[{project.Name}] === Sincronizando Títulos a Receber ===");
+        if (backfillMode)
+            Log.Warning($"[{project.Name}] 🔁 BACKFILL: ignorando checksum — TODOS os títulos serão reenviados");
 
         // Parsear SyncReceivablesFullFromDate do ProjectConfig
         DateTime? fullFromDate = null;
@@ -365,7 +368,10 @@ public class SyncService
 
         try
         {
-            var existingChecksums = await syncLogService.GetReceivableChecksumsAsync();
+            // Em modo backfill, passar dicionário vazio para forçar reenvio de tudo
+            var existingChecksums = backfillMode
+                ? new Dictionary<string, string>()
+                : await syncLogService.GetReceivableChecksumsAsync();
             var limit = _testMode ? _testModeLimit : _batchSize;
 
             if (ignoreFromDate && fullFromDate == null)
