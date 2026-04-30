@@ -92,7 +92,8 @@ public class SyncService
     /// <summary>
     /// Executa sincronização para todos os projetos (chamado pelo Program.cs)
     /// </summary>
-    public async Task ExecuteSyncAsync()
+    /// <param name="backfillReceivables">Se true, ignora checksum em títulos (reenvia tudo). Use para corrigir inadimplência fantasma.</param>
+    public async Task ExecuteSyncAsync(bool backfillReceivables = false)
     {
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
 
@@ -103,9 +104,11 @@ public class SyncService
         }
 
         Log.Information($"🚀 Iniciando sincronização para {validProjects.Count} projeto(s)");
+        if (backfillReceivables)
+            Log.Warning("⚠️ MODO BACKFILL ATIVO: títulos serão reenviados ignorando checksum");
 
         foreach (var project in validProjects)
-            await SyncForProjectAsync(project);
+            await SyncForProjectAsync(project, backfillReceivables);
 
         Log.Information("✅ Sincronização de todos os projetos concluída");
     }
