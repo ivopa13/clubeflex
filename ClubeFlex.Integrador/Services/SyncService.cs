@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Serilog;
 using ClubeFlex.Integrador.Models;
 
@@ -404,13 +405,25 @@ public class SyncService
                         async () => await apiService.SendReceivableAsync(receivable),
                         receivable.EventId, project.Name);
 
+                    // Persistir payload completo (checksum + status + saldos) para auditoria
+                    var auditPayload = JsonConvert.SerializeObject(new
+                    {
+                        checksum = receivable.Checksum,
+                        receivable_id_ext = receivable.ReceivableIdExt,
+                        amount = receivable.Amount,
+                        paid_amount = receivable.PaidAmount,
+                        balance = receivable.Balance,
+                        status = receivable.Status,
+                        due_date = receivable.DueDate
+                    });
+
                     await syncLogService.SaveSyncLogAsync(new SyncLog
                     {
                         EventId = receivable.EventId,
                         EventType = "titulo",
                         Status = result.Success ? "success" : "error",
                         ErrorMessage = result.ErrorMessage,
-                        Payload = receivable.Checksum != null ? $"{{\"checksum\":\"{receivable.Checksum}\"}}" : null
+                        Payload = auditPayload
                     });
 
                     counters.InvoiceCount++;
@@ -462,13 +475,24 @@ public class SyncService
                         async () => await apiService.SendReceivablePaymentAsync(payment),
                         payment.EventId, project.Name);
 
+                    // Persistir payload completo para auditoria (checksum + dados do pagamento)
+                    var auditPayload = JsonConvert.SerializeObject(new
+                    {
+                        checksum = payment.Checksum,
+                        receivable_id_ext = payment.ReceivableIdExt,
+                        paid_amount = payment.PaidAmount,
+                        paid_at = payment.PaidAt,
+                        payment_type = payment.PaymentType,
+                        payment_event_id = payment.PaymentEventId
+                    });
+
                     await syncLogService.SaveSyncLogAsync(new SyncLog
                     {
                         EventId = payment.EventId,
                         EventType = "titulo_pagamento",
                         Status = result.Success ? "success" : "error",
                         ErrorMessage = result.ErrorMessage,
-                        Payload = payment.Checksum != null ? $"{{\"checksum\":\"{payment.Checksum}\"}}" : null
+                        Payload = auditPayload
                     });
 
                     counters.PaymentCount++;
