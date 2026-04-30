@@ -92,7 +92,8 @@ public class SyncService
     /// <summary>
     /// Executa sincronização para todos os projetos (chamado pelo Program.cs)
     /// </summary>
-    public async Task ExecuteSyncAsync()
+    /// <param name="backfillReceivables">Se true, ignora checksum em títulos (reenvia tudo). Use para corrigir inadimplência fantasma.</param>
+    public async Task ExecuteSyncAsync(bool backfillReceivables = false)
     {
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
 
@@ -103,9 +104,11 @@ public class SyncService
         }
 
         Log.Information($"🚀 Iniciando sincronização para {validProjects.Count} projeto(s)");
+        if (backfillReceivables)
+            Log.Warning("⚠️ MODO BACKFILL ATIVO: títulos serão reenviados ignorando checksum");
 
         foreach (var project in validProjects)
-            await SyncForProjectAsync(project);
+            await SyncForProjectAsync(project, backfillReceivables);
 
         Log.Information("✅ Sincronização de todos os projetos concluída");
     }
@@ -129,7 +132,7 @@ public class SyncService
         return _projects.FirstOrDefault(p => p.Name == "ClubeFlex" && p.IsValid());
     }
 
-    private async Task SyncForProjectAsync(ProjectConfig project)
+    private async Task SyncForProjectAsync(ProjectConfig project, bool backfillReceivables = false)
     {
         Log.Information($"[{project.Name}] === Iniciando sincronização ===");
 
@@ -159,7 +162,7 @@ public class SyncService
                 await SyncPaymentsForProjectAsync(project, apiService, syncLogService, counters);
 
             if (project.SyncReceivables)
-                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate);
+                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate, backfillReceivables);
 
             if (project.SyncCustomers)
                 await SyncCustomersForProjectAsync(project, apiService, syncLogService, counters);
@@ -348,9 +351,12 @@ public class SyncService
         ProjectApiService apiService,
         ProjectSyncLogService syncLogService,
         SyncCounters counters,
-        bool ignoreFromDate = false)
+        bool ignoreFromDate = false,
+        bool backfillMode = false)
     {
         Log.Information($"[{project.Name}] === Sincronizando Títulos a Receber ===");
+        if (backfillMode)
+            Log.Warning($"[{project.Name}] 🔁 BACKFILL: ignorando checksum — TODOS os títulos serão reenviados");
 
         // Parsear SyncReceivablesFullFromDate do ProjectConfig
         DateTime? fullFromDate = null;
@@ -362,7 +368,10 @@ public class SyncService
 
         try
         {
-            var existingChecksums = await syncLogService.GetReceivableChecksumsAsync();
+            // Em modo backfill, passar dicionário vazio para forçar reenvio de tudo
+            var existingChecksums = backfillMode
+                ? new Dictionary<string, string>()
+                : await syncLogService.GetReceivableChecksumsAsync();
             var limit = _testMode ? _testModeLimit : _batchSize;
 
             if (ignoreFromDate && fullFromDate == null)
@@ -377,7 +386,10 @@ public class SyncService
                 var offset = (batchNumber - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de títulos (offset {offset})...");
 
-                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, ignoreFromDate, offset, fullFromDate);
+                // Em backfill, força ignorar filtro de data e desliga o filtro inteligente para varrer TUDO (inclusive cancelados antigos)
+                var effectiveIgnoreDate = ignoreFromDate || backfillMode;
+                var effectiveFullFromDate = backfillMode ? (DateTime?)null : fullFromDate;
+                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, effectiveIgnoreDate, offset, effectiveFullFromDate);
                 var receivables = receivableBatch.Items;
 
                 if (receivables.Count == 0)

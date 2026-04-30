@@ -13,7 +13,8 @@ class Program
         bool interactiveMode = args.Contains("--interactive") || args.Contains("-i");
         bool updateTypesMode = args.Contains("--update-types");
         bool fullHistoryMode = args.Contains("--full-history") || args.Contains("--historico");
-        
+        bool backfillReceivables = args.Contains("--backfill-receivables");
+
         // PRIMEIRO: Output básico sem depender de nada
         Console.WriteLine("==============================================");
         Console.WriteLine("       CLUBE FLEX INTEGRADOR v2.0");
@@ -22,6 +23,7 @@ class Program
         if (!interactiveMode) Console.WriteLine("       [FECHA AUTOMATICAMENTE]");
         if (updateTypesMode) Console.WriteLine("       [MODO: ATUALIZAÇÃO DE TIPOS]");
         if (fullHistoryMode) Console.WriteLine("       [MODO: HISTÓRICO COMPLETO - SEM FILTRO DE DATA]");
+        if (backfillReceivables) Console.WriteLine("       [MODO: BACKFILL TÍTULOS - IGNORA CHECKSUM]");
         Console.WriteLine($"Data/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         Console.WriteLine($"Diretório atual: {Directory.GetCurrentDirectory()}");
         Console.WriteLine($"appsettings.json existe: {File.Exists("appsettings.json")}");
@@ -130,9 +132,10 @@ class Program
             {
                 // Executar sincronização normal (ou histórica com --full-history)
                 var modeLabel = fullHistoryMode ? "histórica completa (sem filtro de data)" : "normal";
+                if (backfillReceivables) modeLabel += " + BACKFILL títulos (ignora checksum)";
                 Log.Information($"Iniciando sincronização {modeLabel}...");
                 Console.WriteLine($"Iniciando sincronização {modeLabel}...");
-                await syncService.ExecuteSyncAsync();
+                await syncService.ExecuteSyncAsync(backfillReceivables);
                 Log.Information("Sincronização concluída com sucesso");
                 Console.WriteLine("Sincronização concluída com sucesso!");
             }
