@@ -59,10 +59,13 @@ public class ProjectApiService
 
     /// <summary>
     /// Envia título a receber para o projeto (Sistema de Cobranças)
+    /// Roteia para /titulo-cancelado quando Status='C', senão /titulo-criado
     /// </summary>
     public async Task<ApiResponse> SendReceivableAsync(TituloPayload payload)
     {
-        return await PostAsync("/titulo-criado", payload, $"título {payload.ReceivableIdExt}");
+        var endpoint = payload.Status == "C" ? "/titulo-cancelado" : "/titulo-criado";
+        var label = payload.Status == "C" ? "cancelamento do título" : "título";
+        return await PostAsync(endpoint, payload, $"{label} {payload.ReceivableIdExt}");
     }
 
     /// <summary>
