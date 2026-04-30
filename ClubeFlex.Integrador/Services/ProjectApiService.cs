@@ -118,38 +118,51 @@ public class ProjectApiService
     }
 
     /// <summary>
-    /// Método genérico para POST com tratamento de erros
+    /// Método genérico para POST com tratamento de erros e log detalhado por evento
     /// </summary>
     private async Task<ApiResponse> PostAsync<T>(string endpoint, T payload, string description)
     {
+        var url = $"{_baseUrl}{endpoint}";
+        var json = JsonConvert.SerializeObject(payload, Formatting.None);
+
+        // Identificar receivable_id_ext quando possível para log
+        string? receivableId = null;
         try
         {
-            var url = $"{_baseUrl}{endpoint}";
-            var json = JsonConvert.SerializeObject(payload, Formatting.None);
+            dynamic? dyn = payload;
+            receivableId = dyn?.ReceivableIdExt as string;
+        }
+        catch { }
+
+        try
+        {
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            Log.Information($"[{_projectName}] Enviando {description}...");
+            Log.Information($"[{_projectName}] → POST {endpoint} | {description}");
 
             var response = await _httpClient.PostAsync(url, content);
             var responseBody = await response.Content.ReadAsStringAsync();
+            var statusCode = (int)response.StatusCode;
+
+            // Log auditável: CODCR, endpoint, status HTTP, response body (truncado)
+            var bodyPreview = responseBody.Length > 500 ? responseBody.Substring(0, 500) + "…" : responseBody;
+            var auditLine = $"[AUDIT] project={_projectName} endpoint={endpoint} codcr={receivableId ?? "-"} http={statusCode} body={bodyPreview}";
 
             if (response.IsSuccessStatusCode)
             {
-                Log.Information($"✓ [{_projectName}] {description} enviado com sucesso");
+                Log.Information($"✓ [{_projectName}] {description} OK (HTTP {statusCode})");
+                Log.Information(auditLine);
                 return new ApiResponse { Success = true, Message = responseBody };
             }
             else
             {
-                Log.Error($"✗ [{_projectName}] Erro ao enviar {description}: {response.StatusCode} - {responseBody}");
-                
-                // Erros 4xx são problemas nos dados - nunca devem ser retentados
-                var statusCode = (int)response.StatusCode;
+                Log.Error($"✗ [{_projectName}] Erro ao enviar {description}: {statusCode} - {responseBody}");
+                Log.Warning(auditLine);
+
                 var isClientError = statusCode >= 400 && statusCode < 500;
-                
-                // Verificar se é erro de validação explícito no body
                 var isValidationError = isClientError;
                 string? errorMessage = responseBody;
-                
+
                 try
                 {
                     var errorResponse = JsonConvert.DeserializeObject<dynamic>(responseBody);
@@ -165,10 +178,10 @@ public class ProjectApiService
                 {
                     Log.Warning($"[{_projectName}] ⚠️ Erro {statusCode} (cliente) para {description} - não será retentado");
                 }
-                
-                return new ApiResponse 
-                { 
-                    Success = false, 
+
+                return new ApiResponse
+                {
+                    Success = false,
                     IsValidationError = isValidationError,
                     ErrorMessage = errorMessage
                 };
@@ -177,10 +190,11 @@ public class ProjectApiService
         catch (Exception ex)
         {
             Log.Error(ex, $"[{_projectName}] Exceção ao enviar {description}");
-            return new ApiResponse 
-            { 
-                Success = false, 
-                ErrorMessage = ex.Message 
+            Log.Warning($"[AUDIT] project={_projectName} endpoint={endpoint} codcr={receivableId ?? "-"} http=EX body={ex.Message}");
+            return new ApiResponse
+            {
+                Success = false,
+                ErrorMessage = ex.Message
             };
         }
     }
