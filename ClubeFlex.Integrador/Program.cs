@@ -132,9 +132,10 @@ class Program
             {
                 // Executar sincronização normal (ou histórica com --full-history)
                 var modeLabel = fullHistoryMode ? "histórica completa (sem filtro de data)" : "normal";
+                if (backfillReceivables) modeLabel += " + BACKFILL títulos (ignora checksum)";
                 Log.Information($"Iniciando sincronização {modeLabel}...");
                 Console.WriteLine($"Iniciando sincronização {modeLabel}...");
-                await syncService.ExecuteSyncAsync();
+                await syncService.ExecuteSyncAsync(backfillReceivables);
                 Log.Information("Sincronização concluída com sucesso");
                 Console.WriteLine("Sincronização concluída com sucesso!");
             }
