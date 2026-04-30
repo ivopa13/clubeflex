@@ -262,7 +262,9 @@ public class ProjectSyncLogService
 
             while (hasMore)
             {
-                var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=in.(success,error)&select=event_id,payload&limit={pageSize}&offset={offset}&order=event_id.asc";
+                // IMPORTANTE: somente status=success bloqueia reenvio.
+                // Logs com status=error/pending devem ser reprocessados na próxima execução.
+                var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id,payload&limit={pageSize}&offset={offset}&order=event_id.asc";
                 
                 var response = await _httpClient.GetAsync(url);
                 
