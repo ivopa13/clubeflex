@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Serilog;
 using ClubeFlex.Integrador.Models;
 
@@ -462,13 +463,24 @@ public class SyncService
                         async () => await apiService.SendReceivablePaymentAsync(payment),
                         payment.EventId, project.Name);
 
+                    // Persistir payload completo para auditoria (checksum + dados do pagamento)
+                    var auditPayload = JsonConvert.SerializeObject(new
+                    {
+                        checksum = payment.Checksum,
+                        receivable_id_ext = payment.ReceivableIdExt,
+                        paid_amount = payment.PaidAmount,
+                        paid_at = payment.PaidAt,
+                        payment_type = payment.PaymentType,
+                        payment_event_id = payment.PaymentEventId
+                    });
+
                     await syncLogService.SaveSyncLogAsync(new SyncLog
                     {
                         EventId = payment.EventId,
                         EventType = "titulo_pagamento",
                         Status = result.Success ? "success" : "error",
                         ErrorMessage = result.ErrorMessage,
-                        Payload = payment.Checksum != null ? $"{{\"checksum\":\"{payment.Checksum}\"}}" : null
+                        Payload = auditPayload
                     });
 
                     counters.PaymentCount++;
