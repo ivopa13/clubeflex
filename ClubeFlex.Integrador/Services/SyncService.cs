@@ -405,13 +405,25 @@ public class SyncService
                         async () => await apiService.SendReceivableAsync(receivable),
                         receivable.EventId, project.Name);
 
+                    // Persistir payload completo (checksum + status + saldos) para auditoria
+                    var auditPayload = JsonConvert.SerializeObject(new
+                    {
+                        checksum = receivable.Checksum,
+                        receivable_id_ext = receivable.ReceivableIdExt,
+                        amount = receivable.Amount,
+                        paid_amount = receivable.PaidAmount,
+                        balance = receivable.Balance,
+                        status = receivable.Status,
+                        due_date = receivable.DueDate
+                    });
+
                     await syncLogService.SaveSyncLogAsync(new SyncLog
                     {
                         EventId = receivable.EventId,
                         EventType = "titulo",
                         Status = result.Success ? "success" : "error",
                         ErrorMessage = result.ErrorMessage,
-                        Payload = receivable.Checksum != null ? $"{{\"checksum\":\"{receivable.Checksum}\"}}" : null
+                        Payload = auditPayload
                     });
 
                     counters.InvoiceCount++;
