@@ -1,0 +1,3 @@
+DELETE FROM public.user_roles WHERE user_id = '80388753-96a1-4034-b3a4-27b8b6ba7291';
+DELETE FROM public.profiles WHERE id = '80388753-96a1-4034-b3a4-27b8b6ba7291';
+DELETE FROM auth.users WHERE id = '80388753-96a1-4034-b3a4-27b8b6ba7291';
