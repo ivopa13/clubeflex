@@ -999,7 +999,11 @@ public class DatabaseService
                 cr.CODCR as receivable_id,
                 crr.VALOR as paid_amount,
                 crr.DATA as paid_at,
-                TRIM(crr.CODREC) as payment_type_code
+                TRIM(crr.CODREC) as payment_type_code,
+                cr.VALOR as receivable_amount,
+                COALESCE(cr.TOTPAGO, 0) as receivable_total_paid,
+                cr.FLAGPAGO as flag_pago,
+                cr.FLAGCANCELADA as flag_cancelada
             FROM CONTARECEBERREC crr
             INNER JOIN CONTARECEBER cr ON crr.CODCR = cr.CODCR
             WHERE crr.VALOR > 0
@@ -1035,6 +1039,26 @@ public class DatabaseService
                     continue;
                 }
 
+                // Detectar se o título está quitado/baixado para enviar status='P' explícito
+                // Evita o bug de "balance=0 + status='A'" no Cloud
+                var flagPago = reader.IsDBNull(reader.GetOrdinal("flag_pago"))
+                    ? null
+                    : reader["flag_pago"].ToString()?.Trim().ToUpper();
+                var flagCancelada = reader.IsDBNull(reader.GetOrdinal("flag_cancelada"))
+                    ? null
+                    : reader["flag_cancelada"].ToString()?.Trim().ToUpper();
+                var receivableAmount = reader.IsDBNull(reader.GetOrdinal("receivable_amount"))
+                    ? 0m
+                    : Convert.ToDecimal(reader["receivable_amount"]);
+                var receivableTotalPaid = reader.IsDBNull(reader.GetOrdinal("receivable_total_paid"))
+                    ? 0m
+                    : Convert.ToDecimal(reader["receivable_total_paid"]);
+                var receivableBalance = receivableAmount - receivableTotalPaid;
+
+                string? statusOverride = null;
+                if (flagPago == "S" || receivableBalance <= 0m)
+                    statusOverride = "P";
+
                 var payload = new TituloPagamentoPayload
                 {
                     EventId = eventId,
@@ -1042,7 +1066,8 @@ public class DatabaseService
                     PaidAmount = Convert.ToDecimal(reader["paid_amount"]),
                     PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
                     PaymentType = mappedType,
-                    PaymentEventId = eventId
+                    PaymentEventId = eventId,
+                    Status = statusOverride
                 };
 
                 payload.CalculateChecksum();

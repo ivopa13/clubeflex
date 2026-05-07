@@ -14,6 +14,8 @@ interface TituloPagamentoPayload {
   payment_type: string
   payment_event_id?: string
   execution_id?: string
+  /** Status forçado pelo integrador. 'P' marca o título como quitado. */
+  status?: string
 }
 
 Deno.serve(async (req) => {
@@ -70,14 +72,21 @@ Deno.serve(async (req) => {
     // Calcular novos valores
     const newPaidAmount = Number(receivable.paid_amount) + Number(payload.paid_amount)
     const newBalance = Number(receivable.amount) - newPaidAmount
-    const newStatus = newBalance <= 0 ? 'P' : (newPaidAmount > 0 ? 'PP' : 'A') // P = Pago, PP = Parcialmente Pago, A = Aberto
+    // Se o integrador informou status='P' explicitamente, força quitação (corrige pagos-fantasma).
+    // Caso contrário, calcula pelo saldo como antes.
+    const forcedPaid = payload.status === 'P'
+    const newStatus = forcedPaid
+      ? 'P'
+      : (newBalance <= 0 ? 'P' : (newPaidAmount > 0 ? 'PP' : 'A')) // P = Pago, PP = Parcialmente Pago, A = Aberto
 
     // Atualizar o título
+    // Quando status='P' é forçado, zera saldo e marca como quitado mesmo se o paid_amount cumulativo
+    // não bater (renegociação, baixa parcial registrada como liquidação no ERP, etc).
     const { error: updateError } = await supabaseAdmin
       .from('receivables')
       .update({
-        paid_amount: newPaidAmount,
-        balance: Math.max(0, newBalance),
+        paid_amount: forcedPaid ? Number(receivable.amount) : newPaidAmount,
+        balance: forcedPaid ? 0 : Math.max(0, newBalance),
         status: newStatus,
         is_overdue: newStatus === 'P' ? false : receivable.is_overdue,
         days_overdue: newStatus === 'P' ? 0 : receivable.days_overdue,

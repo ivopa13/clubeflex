@@ -451,7 +451,10 @@ public class SyncService
 
             // === Paginação de pagamentos de títulos ===
             int totalPayments = 0, totalPaySuccess = 0, totalPayErrors = 0, payBatch = 0;
-            var existingPayChecksums = await syncLogService.GetReceivablePaymentChecksumsAsync();
+            // Em backfill, ignora checksum também nos pagamentos (reenvia tudo com status='P' quando aplicável)
+            var existingPayChecksums = backfillMode
+                ? new Dictionary<string, string>()
+                : await syncLogService.GetReceivablePaymentChecksumsAsync();
 
             while (true)
             {
@@ -459,7 +462,9 @@ public class SyncService
                 var offset = (payBatch - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {payBatch} de pagamentos de títulos (offset {offset})...");
 
-                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, ignoreFromDate, offset, fullFromDate);
+                var effectiveIgnoreDatePay = ignoreFromDate || backfillMode;
+                var effectiveFullFromDatePay = backfillMode ? (DateTime?)null : fullFromDate;
+                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, effectiveIgnoreDatePay, offset, effectiveFullFromDatePay);
                 var payments = payBatchResult.Items;
 
                 if (payments.Count == 0)
