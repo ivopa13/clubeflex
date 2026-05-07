@@ -171,6 +171,14 @@ public class TituloPagamentoPayload
     public string PaymentType { get; set; } = "unknown";
 
     /// <summary>
+    /// Status do título após este pagamento (P = quitado).
+    /// Quando enviado, a edge function força o status do receivable em vez de calcular pelo saldo.
+    /// Use 'P' quando FLAGPAGO='S' ou SALDO &lt;= 0 no Firebird.
+    /// </summary>
+    [JsonProperty("status", NullValueHandling = NullValueHandling.Ignore)]
+    public string? Status { get; set; }
+
+    /// <summary>
     /// ID do evento de pagamento (usado como chave de deduplicação no receivable_payments)
     /// Geralmente é o mesmo valor do EventId
     /// </summary>
@@ -194,7 +202,7 @@ public class TituloPagamentoPayload
     /// </summary>
     public void CalculateChecksum()
     {
-        var dataToHash = $"{EventId}|{ReceivableIdExt}|{PaidAmount:F2}|{PaidAt}|{PaymentType}";
+        var dataToHash = $"{EventId}|{ReceivableIdExt}|{PaidAmount:F2}|{PaidAt}|{PaymentType}|{Status}";
         
         using var md5 = MD5.Create();
         var inputBytes = Encoding.UTF8.GetBytes(dataToHash);
