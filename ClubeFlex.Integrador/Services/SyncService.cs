@@ -497,6 +497,15 @@ public class SyncService
                 {
                     payment.ExecutionId = syncLogService.GetCurrentExecutionId();
 
+                    // Pular pagamentos cujo título tem cliente sem CPF/CNPJ válido
+                    // (esses títulos foram pulados na rotina de /titulo-criado e gerariam 404 "Receivable not found")
+                    if (!HasValidDoc(payment.CustomerCpf, payment.CustomerCnpj))
+                    {
+                        Log.Warning($"[{project.Name}] ⏭️ Pagamento {payment.EventId} ignorado: título {payment.ReceivableIdExt} tem cliente sem CPF/CNPJ válido no ERP");
+                        counters.SkippedCount++;
+                        continue;
+                    }
+
                     var result = await SendWithRetryAsync(
                         async () => await apiService.SendReceivablePaymentAsync(payment),
                         payment.EventId, project.Name);
