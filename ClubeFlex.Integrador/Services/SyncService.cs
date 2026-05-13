@@ -413,6 +413,14 @@ public class SyncService
                 {
                     receivable.ExecutionId = syncLogService.GetCurrentExecutionId();
 
+                    // Pular títulos cujo cliente não tem CPF/CNPJ válido (evita 400 em massa na edge function)
+                    if (!HasValidDoc(receivable.Customer?.Cpf, receivable.Customer?.Cnpj))
+                    {
+                        Log.Warning($"[{project.Name}] ⏭️ Título {receivable.ReceivableIdExt} ignorado: cliente {receivable.Customer?.IdExt} ({receivable.Customer?.Name}) sem CPF/CNPJ válido no ERP");
+                        counters.SkippedCount++;
+                        continue;
+                    }
+
                     var result = await SendWithRetryAsync(
                         async () => await apiService.SendReceivableAsync(receivable),
                         receivable.EventId, project.Name);
