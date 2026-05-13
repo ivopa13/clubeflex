@@ -1003,9 +1003,12 @@ public class DatabaseService
                 cr.VALOR as receivable_amount,
                 COALESCE(cr.TOTPAGO, 0) as receivable_total_paid,
                 cr.FLAGPAGO as flag_pago,
-                cr.FLAGCANCELADA as flag_cancelada
+                cr.FLAGCANCELADA as flag_cancelada,
+                c.CPF as customer_cpf,
+                c.CNPJ as customer_cnpj
             FROM CONTARECEBERREC crr
             INNER JOIN CONTARECEBER cr ON crr.CODCR = cr.CODCR
+            INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
             WHERE crr.VALOR > 0
             {dateFilter}
             {statusDateFilter}
@@ -1059,6 +1062,13 @@ public class DatabaseService
                 if (flagPago == "S" || receivableBalance <= 0m)
                     statusOverride = "P";
 
+                var customerCpf = reader.IsDBNull(reader.GetOrdinal("customer_cpf"))
+                    ? null
+                    : reader["customer_cpf"].ToString();
+                var customerCnpj = reader.IsDBNull(reader.GetOrdinal("customer_cnpj"))
+                    ? null
+                    : reader["customer_cnpj"].ToString();
+
                 var payload = new TituloPagamentoPayload
                 {
                     EventId = eventId,
@@ -1067,7 +1077,9 @@ public class DatabaseService
                     PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
                     PaymentType = mappedType,
                     PaymentEventId = eventId,
-                    Status = statusOverride
+                    Status = statusOverride,
+                    CustomerCpf = customerCpf,
+                    CustomerCnpj = customerCnpj
                 };
 
                 payload.CalculateChecksum();

@@ -198,6 +198,18 @@ public class TituloPagamentoPayload
     public string Checksum { get; set; } = string.Empty;
 
     /// <summary>
+    /// CPF do cliente do título (não serializado — usado apenas para filtragem local)
+    /// </summary>
+    [JsonIgnore]
+    public string? CustomerCpf { get; set; }
+
+    /// <summary>
+    /// CNPJ do cliente do título (não serializado — usado apenas para filtragem local)
+    /// </summary>
+    [JsonIgnore]
+    public string? CustomerCnpj { get; set; }
+
+    /// <summary>
     /// Calcula o checksum baseado nos campos do pagamento
     /// </summary>
     public void CalculateChecksum()
