@@ -418,6 +418,7 @@ public class SyncService
                     {
                         Log.Warning($"[{project.Name}] ⏭️ Título {receivable.ReceivableIdExt} ignorado: cliente {receivable.Customer?.IdExt} ({receivable.Customer?.Name}) sem CPF/CNPJ válido no ERP");
                         counters.SkippedCount++;
+                        totalRecSkipped++;
                         continue;
                     }
 
