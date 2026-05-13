@@ -1003,9 +1003,12 @@ public class DatabaseService
                 cr.VALOR as receivable_amount,
                 COALESCE(cr.TOTPAGO, 0) as receivable_total_paid,
                 cr.FLAGPAGO as flag_pago,
-                cr.FLAGCANCELADA as flag_cancelada
+                cr.FLAGCANCELADA as flag_cancelada,
+                c.CPF as customer_cpf,
+                c.CNPJ as customer_cnpj
             FROM CONTARECEBERREC crr
             INNER JOIN CONTARECEBER cr ON crr.CODCR = cr.CODCR
+            INNER JOIN CLIENTE c ON cr.CODCLI = c.CODCLI
             WHERE crr.VALOR > 0
             {dateFilter}
             {statusDateFilter}
