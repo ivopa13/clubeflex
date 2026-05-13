@@ -378,7 +378,7 @@ public class SyncService
                 Log.Information($"[{project.Name}] 🔓 Modo histórico: ignorando filtro de data");
 
             // === Paginação de títulos ===
-            int totalReceivables = 0, totalRecSuccess = 0, totalRecErrors = 0, batchNumber = 0;
+            int totalReceivables = 0, totalRecSuccess = 0, totalRecErrors = 0, totalRecSkipped = 0, batchNumber = 0;
 
             while (true)
             {
@@ -413,6 +413,15 @@ public class SyncService
                 {
                     receivable.ExecutionId = syncLogService.GetCurrentExecutionId();
 
+                    // Pular títulos cujo cliente não tem CPF/CNPJ válido (evita 400 em massa na edge function)
+                    if (!HasValidDoc(receivable.Customer?.Cpf, receivable.Customer?.Cnpj))
+                    {
+                        Log.Warning($"[{project.Name}] ⏭️ Título {receivable.ReceivableIdExt} ignorado: cliente {receivable.Customer?.IdExt} ({receivable.Customer?.Name}) sem CPF/CNPJ válido no ERP");
+                        counters.SkippedCount++;
+                        totalRecSkipped++;
+                        continue;
+                    }
+
                     var result = await SendWithRetryAsync(
                         async () => await apiService.SendReceivableAsync(receivable),
                         receivable.EventId, project.Name);
@@ -446,8 +455,8 @@ public class SyncService
                 if (!receivableBatch.HasMoreRows || _testMode) break;
             }
 
-            if (totalReceivables > 0)
-                Log.Information($"[{project.Name}] 📊 Títulos: {totalReceivables} processados, {totalRecSuccess} sucesso, {totalRecErrors} erros");
+            if (totalReceivables > 0 || totalRecSkipped > 0)
+                Log.Information($"[{project.Name}] 📊 Títulos: {totalReceivables} processados, {totalRecSuccess} sucesso, {totalRecErrors} erros, {totalRecSkipped} pulados (cliente sem CPF/CNPJ)");
 
             // === Paginação de pagamentos de títulos ===
             int totalPayments = 0, totalPaySuccess = 0, totalPayErrors = 0, payBatch = 0;
@@ -587,6 +596,38 @@ public class SyncService
         public int CustomerCount { get; set; }
         public int SuccessCount { get; set; }
         public int ErrorCount { get; set; }
+        public int SkippedCount { get; set; }
+    }
+
+    /// <summary>
+    /// Verifica se o cliente tem CPF (>=11 dígitos) ou CNPJ (>=14 dígitos) válido.
+    /// Rejeita strings vazias, apenas zeros, ou apenas pontuação.
+    /// </summary>
+    private static bool HasValidDoc(string? cpf, string? cnpj)
+    {
+        return HasMinDigits(cpf, 11) || HasMinDigits(cnpj, 14);
+    }
+
+    private static bool HasMinDigits(string? value, int min)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+        int count = 0;
+        foreach (var ch in value)
+        {
+            if (ch >= '0' && ch <= '9')
+            {
+                count++;
+                if (count >= min) break;
+            }
+        }
+        if (count < min) return false;
+        // Rejeitar se todos os dígitos forem zero
+        bool allZero = true;
+        foreach (var ch in value)
+        {
+            if (ch >= '1' && ch <= '9') { allZero = false; break; }
+        }
+        return !allZero;
     }
 
     private async Task SyncCustomersForProjectAsync(
