@@ -378,7 +378,7 @@ public class SyncService
                 Log.Information($"[{project.Name}] 🔓 Modo histórico: ignorando filtro de data");
 
             // === Paginação de títulos ===
-            int totalReceivables = 0, totalRecSuccess = 0, totalRecErrors = 0, batchNumber = 0;
+            int totalReceivables = 0, totalRecSuccess = 0, totalRecErrors = 0, totalRecSkipped = 0, batchNumber = 0;
 
             while (true)
             {
