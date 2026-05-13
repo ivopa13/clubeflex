@@ -455,8 +455,8 @@ public class SyncService
                 if (!receivableBatch.HasMoreRows || _testMode) break;
             }
 
-            if (totalReceivables > 0)
-                Log.Information($"[{project.Name}] 📊 Títulos: {totalReceivables} processados, {totalRecSuccess} sucesso, {totalRecErrors} erros");
+            if (totalReceivables > 0 || totalRecSkipped > 0)
+                Log.Information($"[{project.Name}] 📊 Títulos: {totalReceivables} processados, {totalRecSuccess} sucesso, {totalRecErrors} erros, {totalRecSkipped} pulados (cliente sem CPF/CNPJ)");
 
             // === Paginação de pagamentos de títulos ===
             int totalPayments = 0, totalPaySuccess = 0, totalPayErrors = 0, payBatch = 0;
