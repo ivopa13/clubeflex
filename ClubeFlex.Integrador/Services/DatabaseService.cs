@@ -1062,6 +1062,13 @@ public class DatabaseService
                 if (flagPago == "S" || receivableBalance <= 0m)
                     statusOverride = "P";
 
+                var customerCpf = reader.IsDBNull(reader.GetOrdinal("customer_cpf"))
+                    ? null
+                    : reader["customer_cpf"].ToString();
+                var customerCnpj = reader.IsDBNull(reader.GetOrdinal("customer_cnpj"))
+                    ? null
+                    : reader["customer_cnpj"].ToString();
+
                 var payload = new TituloPagamentoPayload
                 {
                     EventId = eventId,
@@ -1070,7 +1077,9 @@ public class DatabaseService
                     PaidAt = paidAt.Value.ToString("yyyy-MM-dd"),
                     PaymentType = mappedType,
                     PaymentEventId = eventId,
-                    Status = statusOverride
+                    Status = statusOverride,
+                    CustomerCpf = customerCpf,
+                    CustomerCnpj = customerCnpj
                 };
 
                 payload.CalculateChecksum();
