@@ -117,6 +117,10 @@ public class SyncService
     /// <param name="windowTo">Data final da janela.</param>
     public async Task ExecuteSyncAsync(bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null)
     {
+        // CLI tem prioridade; se não veio, usa janela do appsettings.json
+        windowFrom ??= _configWindowFrom;
+        windowTo ??= _configWindowTo;
+
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
 
         if (validProjects.Count == 0)
