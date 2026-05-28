@@ -409,11 +409,58 @@ public class SyncService
                 totalReceivables += receivables.Count;
                 Log.Information($"[{project.Name}] 📋 Lote {batchNumber}: {receivables.Count} títulos");
 
-                foreach (var receivable in receivables)
+                // Particionar: cancelados PRIMEIRO (Status='C'), depois demais.
+                // Ordem por execução: cancelamentos antes de novas faturas/atualizações.
+                var cancelled = receivables.Where(r => r.Status == "C").ToList();
+                var others = receivables.Where(r => r.Status != "C").ToList();
+
+                foreach (var receivable in cancelled)
                 {
                     receivable.ExecutionId = syncLogService.GetCurrentExecutionId();
 
-                    // Pular títulos cujo cliente não tem CPF/CNPJ válido (evita 400 em massa na edge function)
+                    var cancelDate = receivable.CancelledAt ?? DateTime.Today;
+                    var cancelPayload = new TituloCanceladoPayload
+                    {
+                        ReceivableIdExt = receivable.ReceivableIdExt,
+                        EventId = $"CANCEL_{receivable.ReceivableIdExt}_{cancelDate:yyyy-MM-dd}",
+                        Source = "erp_windows",
+                        CancelledAt = cancelDate.ToString("yyyy-MM-dd"),
+                        Reason = receivable.CancelReason ?? "FLAGCANCELADA=Y",
+                        ExecutionId = receivable.ExecutionId
+                    };
+
+                    var result = await SendWithRetryAsync(
+                        async () => await apiService.SendReceivableCancelledAsync(cancelPayload),
+                        cancelPayload.EventId, project.Name);
+
+                    var auditPayload = JsonConvert.SerializeObject(new
+                    {
+                        checksum = receivable.Checksum,
+                        receivable_id_ext = cancelPayload.ReceivableIdExt,
+                        cancelled_at = cancelPayload.CancelledAt,
+                        reason = cancelPayload.Reason
+                    });
+
+                    await syncLogService.SaveSyncLogAsync(new SyncLog
+                    {
+                        EventId = cancelPayload.EventId,
+                        EventType = "titulo_cancelamento",
+                        Status = result.Success ? "success" : "error",
+                        ErrorMessage = result.ErrorMessage,
+                        Payload = auditPayload
+                    });
+
+                    counters.InvoiceCount++;
+                    if (result.Success) { counters.SuccessCount++; totalRecSuccess++; }
+                    else { counters.ErrorCount++; totalRecErrors++; }
+                }
+
+                foreach (var receivable in others)
+                {
+                    receivable.ExecutionId = syncLogService.GetCurrentExecutionId();
+
+                    // Pular títulos cujo cliente não tem CPF/CNPJ válido (evita 400 em massa na edge function).
+                    // Cancelamentos NÃO entram aqui — já foram tratados acima sem precisar de CPF/CNPJ.
                     if (!HasValidDoc(receivable.Customer?.Cpf, receivable.Customer?.Cnpj))
                     {
                         Log.Warning($"[{project.Name}] ⏭️ Título {receivable.ReceivableIdExt} ignorado: cliente {receivable.Customer?.IdExt} ({receivable.Customer?.Name}) sem CPF/CNPJ válido no ERP");

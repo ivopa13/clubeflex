@@ -58,14 +58,37 @@ public class ProjectApiService
     }
 
     /// <summary>
-    /// Envia título a receber para o projeto (Sistema de Cobranças)
-    /// Roteia para /titulo-cancelado quando Status='C', senão /titulo-criado
+    /// Envia título a receber para o projeto (Sistema de Cobranças).
+    /// Sempre posta em /titulo-criado. Cancelamentos devem usar SendReceivableCancelledAsync.
     /// </summary>
     public async Task<ApiResponse> SendReceivableAsync(TituloPayload payload)
     {
-        var endpoint = payload.Status == "C" ? "/titulo-cancelado" : "/titulo-criado";
-        var label = payload.Status == "C" ? "cancelamento do título" : "título";
-        return await PostAsync(endpoint, payload, $"{label} {payload.ReceivableIdExt}");
+        return await PostAsync("/titulo-criado", payload, $"título {payload.ReceivableIdExt}");
+    }
+
+    /// <summary>
+    /// Envia cancelamento de título para /titulo-cancelado com o payload canônico
+    /// (event_id, source, receivable_id_ext, cancelled_at, reason).
+    /// Aplica a política: HTTP 200 com success:false NÃO é retentado.
+    /// </summary>
+    public async Task<ApiResponse> SendReceivableCancelledAsync(TituloCanceladoPayload payload)
+    {
+        var result = await PostAsync("/titulo-cancelado", payload, $"cancelamento do título {payload.ReceivableIdExt}");
+
+        // /titulo-cancelado responde 200 com {success:false} quando o título nunca foi sincronizado.
+        // Tratar como erro permanente para não retentar.
+        if (result.Success && !string.IsNullOrEmpty(result.Message) && result.Message.Contains("\"success\":false"))
+        {
+            Log.Warning($"⚠️ [{_projectName}] /titulo-cancelado retornou 200 com success:false para {payload.ReceivableIdExt}: {result.Message}");
+            return new ApiResponse
+            {
+                Success = false,
+                IsValidationError = true,
+                ErrorMessage = result.Message
+            };
+        }
+
+        return result;
     }
 
     /// <summary>
