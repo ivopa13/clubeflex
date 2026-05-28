@@ -910,6 +910,9 @@ public class DatabaseService
                     }
                 };
 
+                payload.CancelledAt = cancelledAt;
+
+
                 // Calcular checksum
                 payload.CalculateChecksum();
 
