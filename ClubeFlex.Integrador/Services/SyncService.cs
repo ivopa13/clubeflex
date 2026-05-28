@@ -395,10 +395,11 @@ public class SyncService
                 var offset = (batchNumber - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de títulos (offset {offset})...");
 
-                // Em backfill, força ignorar filtro de data e desliga o filtro inteligente para varrer TUDO (inclusive cancelados antigos)
-                var effectiveIgnoreDate = ignoreFromDate || backfillMode;
-                var effectiveFullFromDate = backfillMode ? (DateTime?)null : fullFromDate;
-                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, effectiveIgnoreDate, offset, effectiveFullFromDate);
+                // Janela explícita tem prioridade: usa from/to e ignora filtro inteligente/backfill de data
+                var effectiveIgnoreDate = windowed ? false : (ignoreFromDate || backfillMode);
+                var effectiveFullFromDate = windowed ? (DateTime?)null : (backfillMode ? (DateTime?)null : fullFromDate);
+                var effectiveFromDate = windowed ? windowFrom : _syncFromDate;
+                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, effectiveFromDate, existingChecksums, effectiveIgnoreDate, offset, effectiveFullFromDate, windowed ? windowTo : null);
                 var receivables = receivableBatch.Items;
 
                 if (receivables.Count == 0)
