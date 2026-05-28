@@ -744,13 +744,15 @@ public class DatabaseService
             ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'" 
             : "";
         
-        // Filtro inteligente: antes de fullFromDate apenas abertos, a partir de fullFromDate tudo
+        // Filtro inteligente: antes de fullFromDate apenas abertos OU cancelados (para emitir /titulo-cancelado),
+        // a partir de fullFromDate tudo
         var statusDateFilter = "";
         if (fullFromDate.HasValue)
         {
             statusDateFilter = $@"
             AND (
                 cr.DATVENC >= '{fullFromDate.Value:yyyy-MM-dd}'
+                OR cr.FLAGCANCELADA = 'S'
                 OR (
                     (cr.FLAGPAGO IS NULL OR cr.FLAGPAGO <> 'S')
                     AND (cr.FLAGCANCELADA IS NULL OR cr.FLAGCANCELADA <> 'S')
@@ -759,7 +761,7 @@ public class DatabaseService
             
             if (offset == 0)
             {
-                Log.Information($"📋 Filtro inteligente ativo: antes de {fullFromDate.Value:dd/MM/yyyy} apenas abertos, a partir dessa data tudo");
+                Log.Information($"📋 Filtro inteligente ativo: antes de {fullFromDate.Value:dd/MM/yyyy} apenas abertos+cancelados, a partir dessa data tudo");
             }
         }
         
@@ -782,6 +784,7 @@ public class DatabaseService
                 COALESCE(cr.TOTPAGO, 0) as paid_amount,
                 cr.DATVENC as due_date,
                 cr.DATENTR as issued_at,
+                cr.DATCANCEL as cancelled_at,
                 cr.PARCELA as installment_number,
                 cr.NUMDOC as document_number,
                 cr.OBS as description,
