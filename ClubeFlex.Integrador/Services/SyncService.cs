@@ -528,9 +528,10 @@ public class SyncService
                 var offset = (payBatch - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {payBatch} de pagamentos de títulos (offset {offset})...");
 
-                var effectiveIgnoreDatePay = ignoreFromDate || backfillMode;
-                var effectiveFullFromDatePay = backfillMode ? (DateTime?)null : fullFromDate;
-                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, effectiveIgnoreDatePay, offset, effectiveFullFromDatePay);
+                var effectiveIgnoreDatePay = windowed ? false : (ignoreFromDate || backfillMode);
+                var effectiveFullFromDatePay = windowed ? (DateTime?)null : (backfillMode ? (DateTime?)null : fullFromDate);
+                var effectiveFromDatePay = windowed ? windowFrom : _syncFromDate;
+                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, effectiveFromDatePay, existingPayChecksums, effectiveIgnoreDatePay, offset, effectiveFullFromDatePay, windowed ? windowTo : null);
                 var payments = payBatchResult.Items;
 
                 if (payments.Count == 0)
