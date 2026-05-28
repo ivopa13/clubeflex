@@ -136,7 +136,7 @@ public class SyncService
         return _projects.FirstOrDefault(p => p.Name == "ClubeFlex" && p.IsValid());
     }
 
-    private async Task SyncForProjectAsync(ProjectConfig project, bool backfillReceivables = false)
+    private async Task SyncForProjectAsync(ProjectConfig project, bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null)
     {
         Log.Information($"[{project.Name}] === Iniciando sincronização ===");
 
@@ -166,7 +166,7 @@ public class SyncService
                 await SyncPaymentsForProjectAsync(project, apiService, syncLogService, counters);
 
             if (project.SyncReceivables)
-                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate, backfillReceivables);
+                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate, backfillReceivables, windowFrom, windowTo);
 
             if (project.SyncCustomers)
                 await SyncCustomersForProjectAsync(project, apiService, syncLogService, counters);
