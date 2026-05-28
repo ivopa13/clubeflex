@@ -15,7 +15,21 @@ class Program
         bool fullHistoryMode = args.Contains("--full-history") || args.Contains("--historico");
         bool backfillReceivables = args.Contains("--backfill-receivables");
 
-        // PRIMEIRO: Output básico sem depender de nada
+        // Janela de datas opcional: --month=YYYY-MM  |  --from=YYYY-MM-DD --to=YYYY-MM-DD
+        DateTime? windowFrom = null;
+        DateTime? windowTo = null;
+        string? monthArg = args.FirstOrDefault(a => a.StartsWith("--month="))?.Substring("--month=".Length);
+        string? fromArg = args.FirstOrDefault(a => a.StartsWith("--from="))?.Substring("--from=".Length);
+        string? toArg = args.FirstOrDefault(a => a.StartsWith("--to="))?.Substring("--to=".Length);
+        if (!string.IsNullOrEmpty(monthArg) && DateTime.TryParse(monthArg + "-01", out var monthStart))
+        {
+            windowFrom = new DateTime(monthStart.Year, monthStart.Month, 1);
+            windowTo = windowFrom.Value.AddMonths(1).AddDays(-1);
+        }
+        if (!string.IsNullOrEmpty(fromArg) && DateTime.TryParse(fromArg, out var fromParsed)) windowFrom = fromParsed;
+        if (!string.IsNullOrEmpty(toArg) && DateTime.TryParse(toArg, out var toParsed)) windowTo = toParsed;
+        bool windowed = windowFrom.HasValue && windowTo.HasValue;
+
         Console.WriteLine("==============================================");
         Console.WriteLine("       CLUBE FLEX INTEGRADOR v2.0");
         Console.WriteLine("         (Multi-Projeto Support)");
@@ -24,6 +38,7 @@ class Program
         if (updateTypesMode) Console.WriteLine("       [MODO: ATUALIZAÇÃO DE TIPOS]");
         if (fullHistoryMode) Console.WriteLine("       [MODO: HISTÓRICO COMPLETO - SEM FILTRO DE DATA]");
         if (backfillReceivables) Console.WriteLine("       [MODO: BACKFILL TÍTULOS - IGNORA CHECKSUM]");
+        if (windowed) Console.WriteLine($"       [JANELA: {windowFrom!.Value:dd/MM/yyyy} → {windowTo!.Value:dd/MM/yyyy}]");
         Console.WriteLine($"Data/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         Console.WriteLine($"Diretório atual: {Directory.GetCurrentDirectory()}");
         Console.WriteLine($"appsettings.json existe: {File.Exists("appsettings.json")}");
