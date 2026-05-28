@@ -19,6 +19,9 @@ public class SyncService
     private readonly int _testModeLimit;
     private readonly int _batchSize;
     private readonly DateTime? _syncFromDate;
+    private readonly DateTime? _configWindowFrom;
+    private readonly DateTime? _configWindowTo;
+
 
     public SyncService(DatabaseService databaseService, IConfiguration configuration)
     {
@@ -66,7 +69,24 @@ public class SyncService
 
         if (_testMode)
             Log.Warning($"⚠️ MODO TESTE ATIVADO - Sincronizando apenas {_testModeLimit} registros");
+
+        // Janela opcional via appsettings.json (não precisa CLI no Windows)
+        //   "SyncSettings": { "WindowMonth": "2026-03" }
+        //   ou "WindowFrom": "2026-03-01", "WindowTo": "2026-03-31"
+        var windowMonth = configuration["SyncSettings:WindowMonth"];
+        var windowFromStr = configuration["SyncSettings:WindowFrom"];
+        var windowToStr = configuration["SyncSettings:WindowTo"];
+        if (!string.IsNullOrWhiteSpace(windowMonth) && DateTime.TryParse(windowMonth + "-01", out var mStart))
+        {
+            _configWindowFrom = new DateTime(mStart.Year, mStart.Month, 1);
+            _configWindowTo = _configWindowFrom.Value.AddMonths(1).AddDays(-1);
+        }
+        if (!string.IsNullOrWhiteSpace(windowFromStr) && DateTime.TryParse(windowFromStr, out var wf)) _configWindowFrom = wf;
+        if (!string.IsNullOrWhiteSpace(windowToStr) && DateTime.TryParse(windowToStr, out var wt)) _configWindowTo = wt;
+        if (_configWindowFrom.HasValue && _configWindowTo.HasValue)
+            Log.Warning($"🎯 Janela de datas via appsettings: {_configWindowFrom.Value:dd/MM/yyyy} → {_configWindowTo.Value:dd/MM/yyyy}");
     }
+
 
     private ProjectConfig? LoadLegacyConfig(IConfiguration configuration)
     {
@@ -97,6 +117,10 @@ public class SyncService
     /// <param name="windowTo">Data final da janela.</param>
     public async Task ExecuteSyncAsync(bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null)
     {
+        // CLI tem prioridade; se não veio, usa janela do appsettings.json
+        windowFrom ??= _configWindowFrom;
+        windowTo ??= _configWindowTo;
+
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
 
         if (validProjects.Count == 0)

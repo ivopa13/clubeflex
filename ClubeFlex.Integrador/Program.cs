@@ -145,6 +145,14 @@ class Program
             }
             else
             {
+                // Fallback via appsettings.json (sem CLI): SyncSettings:BackfillReceivables = true
+                if (!backfillReceivables &&
+                    bool.TryParse(configuration["SyncSettings:BackfillReceivables"], out var cfgBackfill) && cfgBackfill)
+                {
+                    backfillReceivables = true;
+                    Console.WriteLine("       [BACKFILL ativado via appsettings.json]");
+                }
+
                 // Executar sincronização normal (ou histórica com --full-history)
                 var modeLabel = fullHistoryMode ? "histórica completa (sem filtro de data)" : "normal";
                 if (backfillReceivables) modeLabel += " + BACKFILL títulos (ignora checksum)";
