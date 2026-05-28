@@ -250,3 +250,32 @@ public class TituloPagamentoPayload
         Checksum = Convert.ToHexString(hashBytes).ToLowerInvariant();
     }
 }
+
+/// <summary>
+/// Payload canônico para cancelamento de título (FLAGCANCELADA='S').
+/// Enviado para POST /titulo-cancelado.
+/// </summary>
+public class TituloCanceladoPayload
+{
+    [JsonProperty("event_id")]
+    public string EventId { get; set; } = string.Empty;
+
+    [JsonProperty("source")]
+    public string Source { get; set; } = "erp_windows";
+
+    [JsonProperty("receivable_id_ext")]
+    public string ReceivableIdExt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Data do cancelamento (DATCANCEL) em ISO-8601 (yyyy-MM-dd).
+    /// </summary>
+    [JsonProperty("cancelled_at")]
+    public string CancelledAt { get; set; } = string.Empty;
+
+    [JsonProperty("reason")]
+    public string Reason { get; set; } = "FLAGCANCELADA=Y";
+
+    [JsonProperty("execution_id", NullValueHandling = NullValueHandling.Ignore)]
+    public string? ExecutionId { get; set; }
+}
+
