@@ -59,6 +59,14 @@ public class ClientePayload
     public string? ZipCode { get; set; }
 
     /// <summary>
+    /// Data original de cadastro no CPlus (DATCAD).
+    /// Usado para distinguir clientes realmente novos de antigos editados/desbloqueados.
+    /// </summary>
+    [JsonProperty("created_at_ext")]
+    public DateTime? CreatedAtExt { get; set; }
+
+
+    /// <summary>
     /// Checksum MD5 dos campos principais para detectar alterações
     /// </summary>
     [JsonProperty("checksum")]
