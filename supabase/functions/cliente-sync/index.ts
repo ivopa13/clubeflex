@@ -23,6 +23,7 @@ interface ClienteSyncPayload {
   city?: string | null;
   state?: string | null;
   zip_code?: string | null;
+  created_at_ext?: string | null;
 }
 
 Deno.serve(async (req) => {
@@ -68,6 +69,7 @@ Deno.serve(async (req) => {
         address_city: body.city || null,
         address_state: body.state || null,
         address_zip: body.zip_code || null,
+        created_at_ext: body.created_at_ext || null,
       }, { onConflict: 'customer_id_ext' })
       .select('id')
       .single();

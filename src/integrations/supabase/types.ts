@@ -72,6 +72,7 @@ export type Database = {
           address_street: string | null
           address_zip: string | null
           created_at: string | null
+          created_at_ext: string | null
           customer_id_ext: string
           doc: string
           email: string | null
@@ -91,6 +92,7 @@ export type Database = {
           address_street?: string | null
           address_zip?: string | null
           created_at?: string | null
+          created_at_ext?: string | null
           customer_id_ext: string
           doc: string
           email?: string | null
@@ -110,6 +112,7 @@ export type Database = {
           address_street?: string | null
           address_zip?: string | null
           created_at?: string | null
+          created_at_ext?: string | null
           customer_id_ext?: string
           doc?: string
           email?: string | null
