@@ -1248,7 +1248,10 @@ public class DatabaseService
                         : reader["customer_state"].ToString()?.Trim(),
                     ZipCode = reader.IsDBNull(reader.GetOrdinal("customer_zip"))
                         ? null
-                        : reader["customer_zip"].ToString()?.Trim()
+                        : reader["customer_zip"].ToString()?.Trim(),
+                    CreatedAtExt = reader.IsDBNull(reader.GetOrdinal("customer_datcad"))
+                        ? (DateTime?)null
+                        : Convert.ToDateTime(reader["customer_datcad"])
                 };
 
                 payload.CalculateChecksum();
