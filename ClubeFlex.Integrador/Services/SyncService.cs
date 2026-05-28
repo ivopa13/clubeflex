@@ -93,7 +93,9 @@ public class SyncService
     /// Executa sincronização para todos os projetos (chamado pelo Program.cs)
     /// </summary>
     /// <param name="backfillReceivables">Se true, ignora checksum em títulos (reenvia tudo). Use para corrigir inadimplência fantasma.</param>
-    public async Task ExecuteSyncAsync(bool backfillReceivables = false)
+    /// <param name="windowFrom">Data inicial da janela (--from / --month). Quando informada junto com windowTo, restringe títulos e pagamentos ao intervalo.</param>
+    /// <param name="windowTo">Data final da janela.</param>
+    public async Task ExecuteSyncAsync(bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null)
     {
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
 
@@ -106,9 +108,11 @@ public class SyncService
         Log.Information($"🚀 Iniciando sincronização para {validProjects.Count} projeto(s)");
         if (backfillReceivables)
             Log.Warning("⚠️ MODO BACKFILL ATIVO: títulos serão reenviados ignorando checksum");
+        if (windowFrom.HasValue && windowTo.HasValue)
+            Log.Warning($"🎯 JANELA DE DATAS ATIVA: {windowFrom.Value:dd/MM/yyyy} → {windowTo.Value:dd/MM/yyyy} (apenas títulos e pagamentos neste intervalo)");
 
         foreach (var project in validProjects)
-            await SyncForProjectAsync(project, backfillReceivables);
+            await SyncForProjectAsync(project, backfillReceivables, windowFrom, windowTo);
 
         Log.Information("✅ Sincronização de todos os projetos concluída");
     }
@@ -132,7 +136,7 @@ public class SyncService
         return _projects.FirstOrDefault(p => p.Name == "ClubeFlex" && p.IsValid());
     }
 
-    private async Task SyncForProjectAsync(ProjectConfig project, bool backfillReceivables = false)
+    private async Task SyncForProjectAsync(ProjectConfig project, bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null)
     {
         Log.Information($"[{project.Name}] === Iniciando sincronização ===");
 
@@ -162,7 +166,7 @@ public class SyncService
                 await SyncPaymentsForProjectAsync(project, apiService, syncLogService, counters);
 
             if (project.SyncReceivables)
-                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate, backfillReceivables);
+                await SyncReceivablesForProjectAsync(project, apiService, syncLogService, counters, project.SyncReceivablesIgnoreDate, backfillReceivables, windowFrom, windowTo);
 
             if (project.SyncCustomers)
                 await SyncCustomersForProjectAsync(project, apiService, syncLogService, counters);
@@ -352,11 +356,16 @@ public class SyncService
         ProjectSyncLogService syncLogService,
         SyncCounters counters,
         bool ignoreFromDate = false,
-        bool backfillMode = false)
+        bool backfillMode = false,
+        DateTime? windowFrom = null,
+        DateTime? windowTo = null)
     {
         Log.Information($"[{project.Name}] === Sincronizando Títulos a Receber ===");
         if (backfillMode)
             Log.Warning($"[{project.Name}] 🔁 BACKFILL: ignorando checksum — TODOS os títulos serão reenviados");
+        var windowed = windowFrom.HasValue && windowTo.HasValue;
+        if (windowed)
+            Log.Information($"[{project.Name}] 🎯 Janela: {windowFrom!.Value:dd/MM/yyyy} → {windowTo!.Value:dd/MM/yyyy}");
 
         // Parsear SyncReceivablesFullFromDate do ProjectConfig
         DateTime? fullFromDate = null;
@@ -386,10 +395,11 @@ public class SyncService
                 var offset = (batchNumber - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {batchNumber} de títulos (offset {offset})...");
 
-                // Em backfill, força ignorar filtro de data e desliga o filtro inteligente para varrer TUDO (inclusive cancelados antigos)
-                var effectiveIgnoreDate = ignoreFromDate || backfillMode;
-                var effectiveFullFromDate = backfillMode ? (DateTime?)null : fullFromDate;
-                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, _syncFromDate, existingChecksums, effectiveIgnoreDate, offset, effectiveFullFromDate);
+                // Janela explícita tem prioridade: usa from/to e ignora filtro inteligente/backfill de data
+                var effectiveIgnoreDate = windowed ? false : (ignoreFromDate || backfillMode);
+                var effectiveFullFromDate = windowed ? (DateTime?)null : (backfillMode ? (DateTime?)null : fullFromDate);
+                var effectiveFromDate = windowed ? windowFrom : _syncFromDate;
+                var receivableBatch = await _databaseService.GetReceivablesAsync(limit, effectiveFromDate, existingChecksums, effectiveIgnoreDate, offset, effectiveFullFromDate, windowed ? windowTo : null);
                 var receivables = receivableBatch.Items;
 
                 if (receivables.Count == 0)
@@ -518,9 +528,10 @@ public class SyncService
                 var offset = (payBatch - 1) * limit;
                 Log.Information($"[{project.Name}] 📦 Lote {payBatch} de pagamentos de títulos (offset {offset})...");
 
-                var effectiveIgnoreDatePay = ignoreFromDate || backfillMode;
-                var effectiveFullFromDatePay = backfillMode ? (DateTime?)null : fullFromDate;
-                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, _syncFromDate, existingPayChecksums, effectiveIgnoreDatePay, offset, effectiveFullFromDatePay);
+                var effectiveIgnoreDatePay = windowed ? false : (ignoreFromDate || backfillMode);
+                var effectiveFullFromDatePay = windowed ? (DateTime?)null : (backfillMode ? (DateTime?)null : fullFromDate);
+                var effectiveFromDatePay = windowed ? windowFrom : _syncFromDate;
+                var payBatchResult = await _databaseService.GetReceivablePaymentsAsync(limit, effectiveFromDatePay, existingPayChecksums, effectiveIgnoreDatePay, offset, effectiveFullFromDatePay, windowed ? windowTo : null);
                 var payments = payBatchResult.Items;
 
                 if (payments.Count == 0)
