@@ -725,6 +725,10 @@ export type Database = {
     }
     Functions: {
       clean_phone_number: { Args: { raw_phone: string }; Returns: string }
+      create_redemption_ledger_entry: {
+        Args: { p_redemption_id: string }
+        Returns: string
+      }
       get_customer_id: { Args: { _user_id: string }; Returns: string }
       get_invoices_total_amount: {
         Args: { from_date: string; to_date: string }
