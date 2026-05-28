@@ -974,33 +974,29 @@ public class DatabaseService
     /// Busca pagamentos de títulos a receber (CONTARECEBERREC) para sincronização
     /// Usado pelo sistema de cobranças (Financeiro)
     /// </summary>
-    public async Task<BatchResult<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
+    public async Task<BatchResult<TituloPagamentoPayload>> GetReceivablePaymentsAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null, DateTime? untilDate = null)
     {
         var batchResult = new BatchResult<TituloPagamentoPayload>();
 
         var batchSize = limit ?? 500;
-        
-        // Se fullFromDate está configurado, forçar filtro de pagamentos a partir dessa data
-        // (pagamentos antigos de títulos já quitados não serão enviados)
+
+        var windowedMode = fromDate.HasValue && untilDate.HasValue;
+
         string dateFilter;
-        if (fullFromDate.HasValue)
+        string statusDateFilter = "";
+
+        if (windowedMode)
+        {
+            dateFilter = $"AND crr.DATA >= '{fromDate!.Value:yyyy-MM-dd}' AND crr.DATA <= '{untilDate!.Value:yyyy-MM-dd}'";
+            if (offset == 0)
+                Log.Information($"📋 Janela ativa: pagamentos de títulos entre {fromDate.Value:dd/MM/yyyy} e {untilDate.Value:dd/MM/yyyy}");
+        }
+        else if (fullFromDate.HasValue)
         {
             dateFilter = $"AND crr.DATA >= '{fullFromDate.Value:yyyy-MM-dd}'";
             if (offset == 0)
                 Log.Information($"📋 Pagamentos de títulos: apenas a partir de {fullFromDate.Value:dd/MM/yyyy}");
-        }
-        else
-        {
-            dateFilter = (fromDate.HasValue && !ignoreFromDate) 
-                ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'" 
-                : "";
-        }
 
-        // Filtro de elegibilidade: só enviar pagamentos de títulos que foram sincronizados
-        // Espelha o statusDateFilter do GetReceivablesAsync
-        var statusDateFilter = "";
-        if (fullFromDate.HasValue)
-        {
             statusDateFilter = $@"
             AND (
                 cr.DATVENC >= '{fullFromDate.Value:yyyy-MM-dd}'
@@ -1009,9 +1005,15 @@ public class DatabaseService
                     AND (cr.FLAGCANCELADA IS NULL OR cr.FLAGCANCELADA <> 'S')
                 )
             )";
-            
+
             if (offset == 0)
                 Log.Information($"📋 Pagamentos de títulos: apenas para títulos elegíveis (filtro de status antes de {fullFromDate.Value:dd/MM/yyyy})");
+        }
+        else
+        {
+            dateFilter = (fromDate.HasValue && !ignoreFromDate)
+                ? $"AND crr.DATA >= '{fromDate.Value:yyyy-MM-dd}'"
+                : "";
         }
 
         var query = $@"
