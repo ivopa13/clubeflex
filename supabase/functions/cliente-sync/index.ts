@@ -23,6 +23,7 @@ interface ClienteSyncPayload {
   city?: string | null;
   state?: string | null;
   zip_code?: string | null;
+  created_at_ext?: string | null;
 }
 
 Deno.serve(async (req) => {
