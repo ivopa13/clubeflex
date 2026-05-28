@@ -113,6 +113,33 @@ public class TituloPayload
     public string? ExecutionId { get; set; }
 
     /// <summary>
+    /// Data de cancelamento (DATCANCEL) — não serializado.
+    /// Usado apenas para roteamento interno: quando Status='C' e CancelledAt está presente,
+    /// o integrador emite um evento /titulo-cancelado em vez de /titulo-criado.
+    /// </summary>
+    [JsonIgnore]
+    public DateTime? CancelledAt { get; set; }
+
+    /// <summary>
+    /// Motivo do cancelamento (apenas uso local para gerar TituloCanceladoPayload).
+    /// </summary>
+    [JsonIgnore]
+    public string? CancelReason { get; set; }
+
+    /// <summary>
+    /// CPF do cliente (não serializado em /titulo-criado — vai em customer.cpf).
+    /// Mantido aqui para uso por filtros locais (HasValidDoc).
+    /// </summary>
+    [JsonIgnore]
+    public string? CustomerCpfRaw => Customer?.Cpf;
+
+    /// <summary>
+    /// CNPJ do cliente (idem).
+    /// </summary>
+    [JsonIgnore]
+    public string? CustomerCnpjRaw => Customer?.Cnpj;
+
+    /// <summary>
     /// Checksum MD5 dos campos que podem mudar (Amount, PaidAmount, Balance, Status)
     /// Usado para detectar alterações e evitar sincronização desnecessária
     /// </summary>
