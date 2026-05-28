@@ -824,6 +824,14 @@ public class DatabaseService
 
                 var issuedAt = SafeParseDateFromFirebird(reader["issued_at"], "issued_at", $"Título {receivableId}");
 
+                // Data de cancelamento (DATCANCEL) — usada para emitir /titulo-cancelado quando FLAGCANCELADA='S'
+                DateTime? cancelledAt = null;
+                var cancelOrd = reader.GetOrdinal("cancelled_at");
+                if (!reader.IsDBNull(cancelOrd))
+                {
+                    cancelledAt = SafeParseDateFromFirebird(reader["cancelled_at"], "cancelled_at", $"Título {receivableId}");
+                }
+
                 // Calcular valores
                 var amount = Convert.ToDecimal(reader["amount"]);
                 var paidAmount = reader.IsDBNull(reader.GetOrdinal("paid_amount")) 
