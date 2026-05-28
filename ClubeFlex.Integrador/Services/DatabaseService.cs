@@ -733,41 +733,48 @@ public class DatabaseService
     /// <param name="fromDate">Data mínima de vencimento (ignorada se ignoreFromDate = true)</param>
     /// <param name="existingChecksums">Checksums existentes para comparar e evitar reenvio de dados inalterados</param>
     /// <param name="ignoreFromDate">Se true, ignora o filtro de data e busca TODOS os títulos em aberto (para régua de cobrança)</param>
-    public async Task<BatchResult<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null)
+    public async Task<BatchResult<TituloPayload>> GetReceivablesAsync(int? limit = null, DateTime? fromDate = null, Dictionary<string, string>? existingChecksums = null, bool ignoreFromDate = false, int offset = 0, DateTime? fullFromDate = null, DateTime? untilDate = null)
     {
         var batchResult = new BatchResult<TituloPayload>();
 
         var batchSize = limit ?? 500;
-        
-        // Se ignoreFromDate = true, não aplica filtro de data
-        var dateFilter = (fromDate.HasValue && !ignoreFromDate) 
-            ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'" 
-            : "";
-        
-        // Filtro inteligente: antes de fullFromDate apenas abertos OU cancelados (para emitir /titulo-cancelado),
-        // a partir de fullFromDate tudo
-        var statusDateFilter = "";
-        if (fullFromDate.HasValue)
+
+        // Janela explícita (--from/--to ou --month) tem PRIORIDADE sobre demais filtros.
+        var windowedMode = fromDate.HasValue && untilDate.HasValue;
+
+        string dateFilter;
+        string statusDateFilter = "";
+
+        if (windowedMode)
         {
-            statusDateFilter = $@"
-            AND (
-                cr.DATVENC >= '{fullFromDate.Value:yyyy-MM-dd}'
-                OR cr.FLAGCANCELADA = 'S'
-                OR (
-                    (cr.FLAGPAGO IS NULL OR cr.FLAGPAGO <> 'S')
-                    AND (cr.FLAGCANCELADA IS NULL OR cr.FLAGCANCELADA <> 'S')
-                )
-            )";
-            
+            dateFilter = $"AND cr.DATVENC >= '{fromDate!.Value:yyyy-MM-dd}' AND cr.DATVENC <= '{untilDate!.Value:yyyy-MM-dd}'";
             if (offset == 0)
-            {
-                Log.Information($"📋 Filtro inteligente ativo: antes de {fullFromDate.Value:dd/MM/yyyy} apenas abertos+cancelados, a partir dessa data tudo");
-            }
+                Log.Information($"📋 Janela ativa: títulos com DATVENC entre {fromDate.Value:dd/MM/yyyy} e {untilDate.Value:dd/MM/yyyy}");
         }
-        
-        if (ignoreFromDate && offset == 0 && !fullFromDate.HasValue)
+        else
         {
-            Log.Information("📋 Buscando TODOS os títulos (abertos, pagos e cancelados, sem filtro de data)");
+            dateFilter = (fromDate.HasValue && !ignoreFromDate)
+                ? $"AND cr.DATVENC >= '{fromDate.Value:yyyy-MM-dd}'"
+                : "";
+
+            if (fullFromDate.HasValue)
+            {
+                statusDateFilter = $@"
+                AND (
+                    cr.DATVENC >= '{fullFromDate.Value:yyyy-MM-dd}'
+                    OR cr.FLAGCANCELADA = 'S'
+                    OR (
+                        (cr.FLAGPAGO IS NULL OR cr.FLAGPAGO <> 'S')
+                        AND (cr.FLAGCANCELADA IS NULL OR cr.FLAGCANCELADA <> 'S')
+                    )
+                )";
+
+                if (offset == 0)
+                    Log.Information($"📋 Filtro inteligente ativo: antes de {fullFromDate.Value:dd/MM/yyyy} apenas abertos+cancelados, a partir dessa data tudo");
+            }
+
+            if (ignoreFromDate && offset == 0 && !fullFromDate.HasValue)
+                Log.Information("📋 Buscando TODOS os títulos (abertos, pagos e cancelados, sem filtro de data)");
         }
 
         var query = $@"
