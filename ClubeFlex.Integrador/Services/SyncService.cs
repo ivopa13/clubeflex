@@ -93,7 +93,9 @@ public class SyncService
     /// Executa sincronização para todos os projetos (chamado pelo Program.cs)
     /// </summary>
     /// <param name="backfillReceivables">Se true, ignora checksum em títulos (reenvia tudo). Use para corrigir inadimplência fantasma.</param>
-    public async Task ExecuteSyncAsync(bool backfillReceivables = false)
+    /// <param name="windowFrom">Data inicial da janela (--from / --month). Quando informada junto com windowTo, restringe títulos e pagamentos ao intervalo.</param>
+    /// <param name="windowTo">Data final da janela.</param>
+    public async Task ExecuteSyncAsync(bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null)
     {
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
 
@@ -106,9 +108,11 @@ public class SyncService
         Log.Information($"🚀 Iniciando sincronização para {validProjects.Count} projeto(s)");
         if (backfillReceivables)
             Log.Warning("⚠️ MODO BACKFILL ATIVO: títulos serão reenviados ignorando checksum");
+        if (windowFrom.HasValue && windowTo.HasValue)
+            Log.Warning($"🎯 JANELA DE DATAS ATIVA: {windowFrom.Value:dd/MM/yyyy} → {windowTo.Value:dd/MM/yyyy} (apenas títulos e pagamentos neste intervalo)");
 
         foreach (var project in validProjects)
-            await SyncForProjectAsync(project, backfillReceivables);
+            await SyncForProjectAsync(project, backfillReceivables, windowFrom, windowTo);
 
         Log.Information("✅ Sincronização de todos os projetos concluída");
     }
