@@ -81,16 +81,11 @@ const PortalCheckout = () => {
 
       if (itemsError) throw itemsError;
 
-      // Create ledger entry
-      const { error: ledgerError } = await supabase
-        .from("points_ledger")
-        .insert({
-          actor_type: actorType,
-          [actorIdField]: actorId,
-          type: "redeem",
-          points: -cartTotal,
-          ref: `Resgate #${redemption.id.slice(0, 8)}`,
-        });
+      // Create ledger entry server-side (validates ownership + amount)
+      const { error: ledgerError } = await supabase.rpc(
+        "create_redemption_ledger_entry",
+        { p_redemption_id: redemption.id }
+      );
 
       if (ledgerError) throw ledgerError;
 
