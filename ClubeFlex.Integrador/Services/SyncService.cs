@@ -19,6 +19,9 @@ public class SyncService
     private readonly int _testModeLimit;
     private readonly int _batchSize;
     private readonly DateTime? _syncFromDate;
+    private readonly DateTime? _configWindowFrom;
+    private readonly DateTime? _configWindowTo;
+
 
     public SyncService(DatabaseService databaseService, IConfiguration configuration)
     {
