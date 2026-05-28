@@ -356,11 +356,16 @@ public class SyncService
         ProjectSyncLogService syncLogService,
         SyncCounters counters,
         bool ignoreFromDate = false,
-        bool backfillMode = false)
+        bool backfillMode = false,
+        DateTime? windowFrom = null,
+        DateTime? windowTo = null)
     {
         Log.Information($"[{project.Name}] === Sincronizando Títulos a Receber ===");
         if (backfillMode)
             Log.Warning($"[{project.Name}] 🔁 BACKFILL: ignorando checksum — TODOS os títulos serão reenviados");
+        var windowed = windowFrom.HasValue && windowTo.HasValue;
+        if (windowed)
+            Log.Information($"[{project.Name}] 🎯 Janela: {windowFrom!.Value:dd/MM/yyyy} → {windowTo!.Value:dd/MM/yyyy}");
 
         // Parsear SyncReceivablesFullFromDate do ProjectConfig
         DateTime? fullFromDate = null;
