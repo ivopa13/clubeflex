@@ -53,7 +53,6 @@ type PresetFilter = "today" | "yesterday" | "this_week" | "custom";
 
 const PROJECT_COLORS: Record<string, string> = {
   ClubeFlex: "bg-[#ff914d] text-white hover:bg-[#ff914d]/90",
-  Financeiro: "bg-[#18375d] text-white hover:bg-[#18375d]/90",
   FlexAmbiental: "bg-emerald-600 text-white hover:bg-emerald-700",
 };
 
