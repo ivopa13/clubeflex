@@ -50,29 +50,65 @@ Deno.serve(async (req) => {
     // Determinar doc: CPF ou CNPJ (o que não for nulo/vazio)
     const cpfClean = body.cpf?.replace(/[^0-9]/g, '') || '';
     const cnpjClean = body.cnpj?.replace(/[^0-9]/g, '') || '';
-    const doc = cpfClean || cnpjClean || '';
+    const doc = cpfClean || cnpjClean || null;
 
-    // UPSERT por customer_id_ext
-    const { data, error } = await supabase
-      .from('customers')
-      .upsert({
-        customer_id_ext: body.customer_id_ext,
-        name: body.name,
-        doc,
-        email: body.email || null,
-        phone: body.phone || null,
-        status: body.status || 'active',
-        address_street: body.street || null,
-        address_number: body.number || null,
-        address_complement: body.complement || null,
-        address_neighborhood: body.neighborhood || null,
-        address_city: body.city || null,
-        address_state: body.state || null,
-        address_zip: body.zip_code || null,
-        created_at_ext: body.created_at_ext || null,
-      }, { onConflict: 'customer_id_ext' })
-      .select('id')
-      .single();
+    const fields = {
+      name: body.name,
+      email: body.email || null,
+      phone: body.phone || null,
+      status: body.status || 'active',
+      address_street: body.street || null,
+      address_number: body.number || null,
+      address_complement: body.complement || null,
+      address_neighborhood: body.neighborhood || null,
+      address_city: body.city || null,
+      address_state: body.state || null,
+      address_zip: body.zip_code || null,
+      created_at_ext: body.created_at_ext || null,
+    };
+
+    // Se o doc já pertence a outro código do ERP, agrega no cadastro existente
+    // (o ERP pode ter vários códigos para o mesmo CPF/CNPJ)
+    let existingByDoc: { id: string; customer_id_ext: string; external_ids: any } | null = null;
+    if (doc) {
+      const { data: found } = await supabase
+        .from('customers')
+        .select('id, customer_id_ext, external_ids')
+        .eq('doc', doc)
+        .maybeSingle();
+      existingByDoc = found ?? null;
+    }
+
+    let data: { id: string } | null = null;
+    let error: { message: string } | null = null;
+
+    if (existingByDoc && existingByDoc.customer_id_ext !== body.customer_id_ext) {
+      const currentIds: string[] = Array.isArray(existingByDoc.external_ids)
+        ? existingByDoc.external_ids
+        : [];
+      const externalIds = currentIds.includes(body.customer_id_ext)
+        ? currentIds
+        : [...currentIds, body.customer_id_ext];
+
+      const res = await supabase
+        .from('customers')
+        .update({ ...fields, external_ids: externalIds })
+        .eq('id', existingByDoc.id)
+        .select('id')
+        .single();
+      data = res.data;
+      error = res.error;
+    } else {
+      const res = await supabase
+        .from('customers')
+        .upsert({ customer_id_ext: body.customer_id_ext, doc, ...fields }, {
+          onConflict: 'customer_id_ext',
+        })
+        .select('id')
+        .single();
+      data = res.data;
+      error = res.error;
+    }
 
     if (error) {
       console.error('Erro ao upsert customer:', error);
@@ -81,6 +117,7 @@ Deno.serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     // Registrar no sync_logs
     await supabase
