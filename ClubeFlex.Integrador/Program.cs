@@ -30,6 +30,12 @@ class Program
         if (!string.IsNullOrEmpty(toArg) && DateTime.TryParse(toArg, out var toParsed)) windowTo = toParsed;
         bool windowed = windowFrom.HasValue && windowTo.HasValue;
 
+        // Filtro de projetos: --only=ClubeFlex  |  --only=FlexAmbiental,ClubeFlex
+        string? onlyArg = args.FirstOrDefault(a => a.StartsWith("--only="))?.Substring("--only=".Length);
+        var onlyProjects = string.IsNullOrWhiteSpace(onlyArg)
+            ? null
+            : onlyArg.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
         Console.WriteLine("==============================================");
         Console.WriteLine("       CLUBE FLEX INTEGRADOR v2.0");
         Console.WriteLine("         (Multi-Projeto Support)");
@@ -38,7 +44,9 @@ class Program
         if (updateTypesMode) Console.WriteLine("       [MODO: ATUALIZAÇÃO DE TIPOS]");
         if (fullHistoryMode) Console.WriteLine("       [MODO: HISTÓRICO COMPLETO - SEM FILTRO DE DATA]");
         if (backfillReceivables) Console.WriteLine("       [MODO: BACKFILL TÍTULOS - IGNORA CHECKSUM]");
+        if (onlyProjects != null) Console.WriteLine($"       [PROJETOS: {string.Join(", ", onlyProjects)}]");
         if (windowed) Console.WriteLine($"       [JANELA: {windowFrom!.Value:dd/MM/yyyy} → {windowTo!.Value:dd/MM/yyyy}]");
+
         Console.WriteLine($"Data/Hora: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
         Console.WriteLine($"Diretório atual: {Directory.GetCurrentDirectory()}");
         Console.WriteLine($"appsettings.json existe: {File.Exists("appsettings.json")}");
@@ -159,7 +167,7 @@ class Program
                 if (windowed) modeLabel += $" + JANELA {windowFrom!.Value:dd/MM/yyyy}-{windowTo!.Value:dd/MM/yyyy}";
                 Log.Information($"Iniciando sincronização {modeLabel}...");
                 Console.WriteLine($"Iniciando sincronização {modeLabel}...");
-                await syncService.ExecuteSyncAsync(backfillReceivables, windowFrom, windowTo);
+                await syncService.ExecuteSyncAsync(backfillReceivables, windowFrom, windowTo, onlyProjects);
                 Log.Information("Sincronização concluída com sucesso");
                 Console.WriteLine("Sincronização concluída com sucesso!");
             }
