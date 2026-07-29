@@ -6,13 +6,16 @@ const corsHeaders = {
 };
 
 interface SyncLogPayload {
+  action?: 'checksums';
   event_id: string;
-  event_type: 'fatura' | 'pagamento';
+  event_type: string;
   status: 'pending' | 'success' | 'error';
   payload?: any;
   error_message?: string;
   attempts?: number;
   execution_id?: string;
+  limit?: number;
+  offset?: number;
 }
 
 Deno.serve(async (req) => {
@@ -27,6 +30,46 @@ Deno.serve(async (req) => {
     );
 
     const body: SyncLogPayload = await req.json();
+
+    // Leitura de checksums (usada pelo integrador para evitar reenvio total)
+    if (body.action === 'checksums') {
+      if (!body.event_type) {
+        return new Response(
+          JSON.stringify({ error: 'event_type é obrigatório' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const limit = Math.min(Math.max(Number(body.limit) || 1000, 1), 1000);
+      const offset = Math.max(Number(body.offset) || 0, 0);
+
+      const { data: rows, error: readError } = await supabase
+        .from('sync_logs')
+        .select('event_id,payload')
+        .eq('event_type', body.event_type)
+        .eq('status', 'success')
+        .order('event_id', { ascending: true })
+        .range(offset, offset + limit - 1);
+
+      if (readError) {
+        console.error('Erro ao ler checksums:', readError);
+        return new Response(
+          JSON.stringify({ error: readError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const items = (rows ?? []).map((r: any) => ({
+        event_id: r.event_id,
+        checksum: r.payload?.checksum ?? null,
+      }));
+
+      return new Response(
+        JSON.stringify({ success: true, count: items.length, items }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Sync log:', body.event_id, body.event_type, body.status);
 
     if (!body.event_id || !body.event_type || !body.status) {
@@ -35,6 +78,7 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     const { data, error } = await supabase
       .from('sync_logs')

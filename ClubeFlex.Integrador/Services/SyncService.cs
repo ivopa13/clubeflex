@@ -283,10 +283,15 @@ public class SyncService
             if (totalInvoices > 0)
                 Log.Information($"[{project.Name}] 📊 Faturas: {totalInvoices} processadas, {totalSuccess} sucesso, {totalErrors} erros");
         }
+        catch (ChecksumUnavailableException ex)
+        {
+            Log.Error($"❌ [{project.Name}] ABORTANDO sincronização de faturas: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Log.Error(ex, $"[{project.Name}] Erro ao sincronizar faturas");
         }
+
     }
 
     private async Task SyncPaymentsForProjectAsync(
@@ -320,10 +325,15 @@ public class SyncService
             else
                 Log.Information($"[{project.Name}] Nenhum pagamento novo ou alterado");
         }
+        catch (ChecksumUnavailableException ex)
+        {
+            Log.Error($"❌ [{project.Name}] ABORTANDO sincronização de pagamentos: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Log.Error(ex, $"[{project.Name}] Erro ao sincronizar pagamentos");
         }
+
     }
 
     private class PaymentAccumulator
@@ -800,9 +810,14 @@ public class SyncService
             if (totalCustomers > 0)
                 Log.Information($"[{project.Name}] 📊 Clientes: {totalCustomers} processados, {totalSuccess} sucesso, {totalErrors} erros");
         }
+        catch (ChecksumUnavailableException ex)
+        {
+            Log.Error($"❌ [{project.Name}] ABORTANDO sincronização de clientes: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Log.Error(ex, $"[{project.Name}] Erro ao sincronizar clientes");
         }
+
     }
 }
