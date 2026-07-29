@@ -320,10 +320,15 @@ public class SyncService
             else
                 Log.Information($"[{project.Name}] Nenhum pagamento novo ou alterado");
         }
+        catch (ChecksumUnavailableException ex)
+        {
+            Log.Error($"❌ [{project.Name}] ABORTANDO sincronização de pagamentos: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Log.Error(ex, $"[{project.Name}] Erro ao sincronizar pagamentos");
         }
+
     }
 
     private class PaymentAccumulator
