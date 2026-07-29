@@ -1,0 +1,1 @@
+DELETE FROM public.sync_logs WHERE event_id = 'CLI_TEST_DIAG_1';
