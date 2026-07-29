@@ -115,13 +115,24 @@ public class SyncService
     /// <param name="backfillReceivables">Se true, ignora checksum em títulos (reenvia tudo). Use para corrigir inadimplência fantasma.</param>
     /// <param name="windowFrom">Data inicial da janela (--from / --month). Quando informada junto com windowTo, restringe títulos e pagamentos ao intervalo.</param>
     /// <param name="windowTo">Data final da janela.</param>
-    public async Task ExecuteSyncAsync(bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null)
+    /// <param name="onlyProjects">Se informado, sincroniza apenas os projetos cujo Name esteja na lista (--only=Nome1,Nome2).</param>
+    public async Task ExecuteSyncAsync(bool backfillReceivables = false, DateTime? windowFrom = null, DateTime? windowTo = null, IEnumerable<string>? onlyProjects = null)
     {
         // CLI tem prioridade; se não veio, usa janela do appsettings.json
         windowFrom ??= _configWindowFrom;
         windowTo ??= _configWindowTo;
 
         var validProjects = _projects.Where(p => p.IsValid()).ToList();
+
+        var filter = onlyProjects?.Select(n => n.Trim()).Where(n => n.Length > 0).ToList();
+        if (filter is { Count: > 0 })
+        {
+            var before = validProjects.Count;
+            validProjects = validProjects
+                .Where(p => filter.Any(n => string.Equals(n, p.Name, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            Log.Information($"🎯 Filtro --only ativo: {string.Join(", ", filter)} ({validProjects.Count}/{before} projeto(s) selecionado(s))");
+        }
 
         if (validProjects.Count == 0)
         {
@@ -134,6 +145,7 @@ public class SyncService
             Log.Warning("⚠️ MODO BACKFILL ATIVO: títulos serão reenviados ignorando checksum");
         if (windowFrom.HasValue && windowTo.HasValue)
             Log.Warning($"🎯 JANELA DE DATAS ATIVA: {windowFrom.Value:dd/MM/yyyy} → {windowTo.Value:dd/MM/yyyy} (apenas títulos e pagamentos neste intervalo)");
+
 
         foreach (var project in validProjects)
             await SyncForProjectAsync(project, backfillReceivables, windowFrom, windowTo);
