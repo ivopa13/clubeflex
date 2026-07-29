@@ -283,10 +283,15 @@ public class SyncService
             if (totalInvoices > 0)
                 Log.Information($"[{project.Name}] 📊 Faturas: {totalInvoices} processadas, {totalSuccess} sucesso, {totalErrors} erros");
         }
+        catch (ChecksumUnavailableException ex)
+        {
+            Log.Error($"❌ [{project.Name}] ABORTANDO sincronização de faturas: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Log.Error(ex, $"[{project.Name}] Erro ao sincronizar faturas");
         }
+
     }
 
     private async Task SyncPaymentsForProjectAsync(
