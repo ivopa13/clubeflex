@@ -800,9 +800,14 @@ public class SyncService
             if (totalCustomers > 0)
                 Log.Information($"[{project.Name}] 📊 Clientes: {totalCustomers} processados, {totalSuccess} sucesso, {totalErrors} erros");
         }
+        catch (ChecksumUnavailableException ex)
+        {
+            Log.Error($"❌ [{project.Name}] ABORTANDO sincronização de clientes: {ex.Message}");
+        }
         catch (Exception ex)
         {
             Log.Error(ex, $"[{project.Name}] Erro ao sincronizar clientes");
         }
+
     }
 }
