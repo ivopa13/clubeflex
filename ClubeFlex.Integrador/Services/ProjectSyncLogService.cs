@@ -319,11 +319,35 @@ public class ProjectSyncLogService
 
         Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de {displayName}");
 
-
-        
         return checksums;
     }
 }
+
+/// <summary>
+/// Lançada quando não foi possível carregar os checksums.
+/// Nunca assumir "0 checksums" nesse caso: isso reenviaria a base inteira.
+/// </summary>
+public class ChecksumUnavailableException : Exception
+{
+    public ChecksumUnavailableException(string message) : base(message) { }
+    public ChecksumUnavailableException(string message, Exception inner) : base(message, inner) { }
+}
+
+public class ChecksumsResponse
+{
+    [System.Text.Json.Serialization.JsonPropertyName("items")]
+    public List<ChecksumItem>? Items { get; set; }
+}
+
+public class ChecksumItem
+{
+    [System.Text.Json.Serialization.JsonPropertyName("event_id")]
+    public string? EventId { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("checksum")]
+    public string? Checksum { get; set; }
+}
+
 
 /// <summary>
 /// Response para sync_log com payload
