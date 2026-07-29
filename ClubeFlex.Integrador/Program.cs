@@ -167,7 +167,7 @@ class Program
                 if (windowed) modeLabel += $" + JANELA {windowFrom!.Value:dd/MM/yyyy}-{windowTo!.Value:dd/MM/yyyy}";
                 Log.Information($"Iniciando sincronização {modeLabel}...");
                 Console.WriteLine($"Iniciando sincronização {modeLabel}...");
-                await syncService.ExecuteSyncAsync(backfillReceivables, windowFrom, windowTo);
+                await syncService.ExecuteSyncAsync(backfillReceivables, windowFrom, windowTo, onlyProjects);
                 Log.Information("Sincronização concluída com sucesso");
                 Console.WriteLine("Sincronização concluída com sucesso!");
             }
