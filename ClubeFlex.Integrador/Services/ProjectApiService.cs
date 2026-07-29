@@ -42,17 +42,18 @@ public class ProjectApiService
     {
         var result = await PostAsync("/pagamento-confirmado", payload, $"pagamento da fatura {payload.InvoiceIdExt}");
         
-        // Verificar se foi "ignorado" por fatura não encontrada
+        // Fatura não encontrada (título anterior ao corte): ignora de forma definitiva.
+        // Marca como sucesso para gravar checksum e não reprocessar em todo ciclo.
         if (result.Success && result.Message?.Contains("warning") == true)
         {
-            Log.Warning($"⚠️ [{_projectName}] Pagamento da fatura {payload.InvoiceIdExt} ignorado: fatura não encontrada");
-            return new ApiResponse 
-            { 
-                Success = false, 
-                IsValidationError = true,
-                ErrorMessage = $"Fatura não encontrada: {payload.InvoiceIdExt}. Sincronize a fatura primeiro."
+            Log.Warning($"⚠️ [{_projectName}] Pagamento da fatura {payload.InvoiceIdExt} ignorado (fatura não encontrada) - marcado como processado");
+            return new ApiResponse
+            {
+                Success = true,
+                Message = $"skipped: fatura {payload.InvoiceIdExt} não encontrada"
             };
         }
+
         
         return result;
     }
