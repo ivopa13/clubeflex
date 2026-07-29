@@ -74,7 +74,7 @@ export type Database = {
           created_at: string | null
           created_at_ext: string | null
           customer_id_ext: string
-          doc: string
+          doc: string | null
           email: string | null
           external_ids: Json | null
           id: string
@@ -94,7 +94,7 @@ export type Database = {
           created_at?: string | null
           created_at_ext?: string | null
           customer_id_ext: string
-          doc: string
+          doc?: string | null
           email?: string | null
           external_ids?: Json | null
           id?: string
@@ -114,7 +114,7 @@ export type Database = {
           created_at?: string | null
           created_at_ext?: string | null
           customer_id_ext?: string
-          doc?: string
+          doc?: string | null
           email?: string | null
           external_ids?: Json | null
           id?: string
