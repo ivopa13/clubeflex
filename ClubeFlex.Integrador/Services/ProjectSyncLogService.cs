@@ -252,71 +252,74 @@ public class ProjectSyncLogService
     private async Task<Dictionary<string, string>> GetChecksumsAsync(string eventType, string displayName)
     {
         var checksums = new Dictionary<string, string>();
-        
-        try
-        {
-            // Paginar para buscar TODOS os checksums (PostgREST limita a 1000 por padrão)
-            const int pageSize = 1000;
-            int offset = 0;
-            bool hasMore = true;
 
-            while (hasMore)
+        // Paginar para buscar TODOS os checksums (limite de 1000 por página)
+        const int pageSize = 1000;
+        int offset = 0;
+        bool hasMore = true;
+
+        while (hasMore)
+        {
+            // IMPORTANTE: somente status=success bloqueia reenvio (filtrado na edge function).
+            // Usamos a edge function (service role) em vez do PostgREST direto porque a
+            // tabela sync_logs não é legível pelo papel anon.
+            var payload = new
             {
-                // IMPORTANTE: somente status=success bloqueia reenvio.
-                // Logs com status=error/pending devem ser reprocessados na próxima execução.
-                var url = $"{_apiUrl}/sync_logs?event_type=eq.{eventType}&status=eq.success&select=event_id,payload&limit={pageSize}&offset={offset}&order=event_id.asc";
-                
-                var response = await _httpClient.GetAsync(url);
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var logs = JsonSerializer.Deserialize<List<SyncLogWithPayloadResponse>>(json);
-                    var pageCount = logs?.Count ?? 0;
-                    
-                    foreach (var log in logs ?? Enumerable.Empty<SyncLogWithPayloadResponse>())
-                    {
-                        if (!string.IsNullOrEmpty(log.EventId))
-                        {
-                            try
-                            {
-                                if (log.Payload != null && log.Payload.Value.TryGetProperty("checksum", out var checksumElement))
-                                {
-                                    var checksum = checksumElement.GetString();
-                                    if (!string.IsNullOrEmpty(checksum))
-                                    {
-                                        checksums[log.EventId] = checksum;
-                                        continue;
-                                    }
-                                }
-                                // Registros antigos sem checksum: marcar como já sincronizado
-                                // Usa sentinela "__no_checksum__" para que o DatabaseService pule
-                                checksums[log.EventId] = "__no_checksum__";
-                            }
-                            catch
-                            {
-                                checksums[log.EventId] = "__no_checksum__";
-                            }
-                        }
-                    }
+                action = "checksums",
+                event_type = eventType,
+                limit = pageSize,
+                offset
+            };
 
-                    // Se retornou menos que pageSize, não há mais páginas
-                    hasMore = pageCount >= pageSize;
-                    offset += pageSize;
-                }
-                else
-                {
-                    Log.Warning($"❌ [{_projectName}] Erro ao consultar checksums de {displayName}: {response.StatusCode}");
-                    hasMore = false;
-                }
+            var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            HttpResponseMessage response;
+            try
+            {
+                response = await _httpClient.PostAsync($"{_functionsUrl}/sync-log", content);
             }
-                
-            Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de {displayName}");
+            catch (Exception ex)
+            {
+                throw new ChecksumUnavailableException(
+                    $"[{_projectName}] Falha de rede ao consultar checksums de {displayName}: {ex.Message}", ex);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                throw new ChecksumUnavailableException(
+                    $"[{_projectName}] Erro ao consultar checksums de {displayName}: {(int)response.StatusCode} {response.StatusCode} {errorBody}");
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            ChecksumsResponse? parsed;
+            try
+            {
+                parsed = JsonSerializer.Deserialize<ChecksumsResponse>(json);
+            }
+            catch (Exception ex)
+            {
+                throw new ChecksumUnavailableException(
+                    $"[{_projectName}] Resposta inválida ao consultar checksums de {displayName}: {ex.Message}", ex);
+            }
+
+            var items = parsed?.Items ?? new List<ChecksumItem>();
+
+            foreach (var item in items)
+            {
+                if (string.IsNullOrEmpty(item.EventId)) continue;
+
+                // Registros antigos sem checksum: sentinela para que o DatabaseService pule
+                checksums[item.EventId] = string.IsNullOrEmpty(item.Checksum) ? "__no_checksum__" : item.Checksum!;
+            }
+
+            hasMore = items.Count >= pageSize;
+            offset += pageSize;
         }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, $"⚠️ [{_projectName}] Não foi possível consultar checksums de {displayName}");
-        }
+
+        Log.Information($"✅ [{_projectName}] {checksums.Count} checksums carregados para comparação de {displayName}");
+
+
         
         return checksums;
     }
